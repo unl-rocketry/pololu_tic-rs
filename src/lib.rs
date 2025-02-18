@@ -1,27 +1,45 @@
-//! # Pololu Tic36v4 driver
+//! # Pololu Tic Driver
+//! A platform agnostic Rust driver for the
+//! [Pololu Tic motor driver](https://www.pololu.com/tic) boards.
+//! Currently this library only supports the `I2C` interface of the boards,
+//! but serial support is planned.
+//!
+//! This library supports the same boards the equivalent
+//! [Arduino library](https://github.com/pololu/tic-arduino/) supports,
+//! currently the `T500`, `T834`, `T825`, `T249`, `36v4` are supported.
 
 #![deny(unsafe_code)]
 #![no_std]
 
 pub mod base;
-mod i2c;
+pub mod i2c;
 
 #[macro_use]
 extern crate num_derive;
+
+#[doc(inline)]
+pub use i2c::TicI2C;
 
 const TIC_03A_CURRENT_TABLE: [u16; 33] = [
     0, 1, 174, 343, 495, 634, 762, 880, 990, 1092, 1189, 1281, 1368, 1452, 1532, 1611, 1687, 1762,
     1835, 1909, 1982, 2056, 2131, 2207, 2285, 2366, 2451, 2540, 2634, 2734, 2843, 2962, 3093,
 ];
 
+/// The type of Tic driver that is being represented.
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TicProduct {
+    /// An unknown driver. Used if not provided, as the default.
     Unknown = 0,
+    /// [Tic T825](https://www.pololu.com/product/3130)
     T825 = 1,
+    /// [Tic T834](https://www.pololu.com/product/3132)
     T834 = 2,
+    /// [Tic T500](https://www.pololu.com/product/3134)
     T500 = 3,
+    /// [Tic T249](https://www.pololu.com/product/3138)
     T249 = 4,
+    /// [Tic T825](https://www.pololu.com/product/3130)
     Tic36v4 = 5,
 }
 
@@ -38,10 +56,11 @@ const TIC_T249_CURRENT_UNITS: u8 = 40;
 /// 16-bit input variables.
 const TIC_INPUT_NULL: u16 = 0xFFFF;
 
-/// This enum defines the Tic's error bits.  See the "Error handling" section of
-/// the Tic user's guide for more information about what these errors mean.
+/// This enum defines the Tic's error bits. See the
+/// "[Error handling](https://www.pololu.com/docs/0J71/5.4)" section of the Tic
+/// user's guide for more information about what these errors mean.
 ///
-/// See TicBase::getErrorStatus() and TicBase::getErrorsOccurred().
+/// See [`base::TicBase::get_error_status()`] and [`base::TicBase::get_errors_occurred()`].
 #[derive(FromPrimitive, ToPrimitive)]
 pub enum TicError {
     IntentionallyDeenergized = 0,

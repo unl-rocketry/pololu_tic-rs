@@ -1,7 +1,10 @@
+//! I2C interface to a Tic motor driver board.
+
 use embedded_hal::i2c::I2c;
 
-use crate::{base::TicBase, TicCommand, TicProduct};
+use crate::{base::{TicBase, TicCommunication}, TicCommand, TicProduct};
 
+/// I2C interface to a Tic board.
 pub struct TicI2C<I2C> {
     address: u8,
     i2c: I2C,
@@ -12,22 +15,31 @@ pub struct TicI2C<I2C> {
 impl<I2C: I2c> TicI2C<I2C> {
     const DEFAULT_ADDR: u8 = 14;
 
-    fn new_default(i2c: I2C, product: TicProduct, address: Option<u8>) -> Self {
+    pub fn new_default(i2c: I2C, product: TicProduct) -> Self {
         Self {
-            address: address.unwrap_or(Self::DEFAULT_ADDR),
+            address: Self::DEFAULT_ADDR,
             i2c,
             product,
             last_error: 0,
         }
     }
 
-    fn get_address(&self) -> u8 {
+    pub fn new_with_address(i2c: I2C, product: TicProduct, address: u8) -> Self {
+        Self {
+            address,
+            i2c,
+            product,
+            last_error: 0,
+        }
+    }
+
+    pub fn get_address(&self) -> u8 {
         self.address
     }
 }
 
 // TODO: Properly error handle this stuff!!!
-impl<I2C: I2c> TicBase for TicI2C<I2C> {
+impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
     fn command_quick(&mut self, cmd: TicCommand) {
         self.i2c.write(self.address, &[cmd as u8]).unwrap();
     }
@@ -55,7 +67,9 @@ impl<I2C: I2c> TicBase for TicI2C<I2C> {
 
         self.i2c.read(self.address, buffer).unwrap();
     }
+}
 
+impl<I2C: I2c> TicBase for TicI2C<I2C> {
     fn product(&self) -> TicProduct {
         self.product
     }

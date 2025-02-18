@@ -6,7 +6,7 @@ use crate::{
     TicAgcBottomCurrentLimit, TicAgcCurrentBoostSteps, TicAgcFrequencyLimit, TicAgcMode, TicCommand, TicDecayMode, TicError, TicInputState, TicMiscFlags1, TicMotorDriverError, TicOperationState, TicPin, TicPinState, TicPlanningMode, TicProduct, TicReset, TicStepMode, TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_T249_CURRENT_UNITS
 };
 
-pub trait TicBase {
+pub(crate) trait TicCommunication {
     fn command_quick(&mut self, cmd: TicCommand);
     fn command_w32(&mut self, cmd: TicCommand, val: u32);
     fn command_w7(&mut self, cmd: TicCommand, val: u8);
@@ -29,14 +29,17 @@ pub trait TicBase {
         self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
         u32::from_le_bytes(buffer)
     }
+}
 
+pub trait TicBase: TicCommunication {
+    /// Gets the current Tic product
     fn product(&self) -> TicProduct;
 
     /// Sets the target position of the Tic, in microsteps.
     ///
     /// Example usage:
     /// ```
-    /// tic.setTargetPosition(100);
+    /// tic.set_target_position(100);
     /// ```
     ///
     /// This function sends a "Set target position" to the Tic.  If the Control
@@ -44,7 +47,7 @@ pub trait TicBase {
     /// reach the target position.  If the control mode is something other than
     /// Serial, this command will be silently ignored.
     ///
-    /// See also [`getTargetPosition()`].
+    /// See also [`Self::get_target_position()`].
     fn set_target_position(&mut self, position: i32) {
         self.command_w32(TicCommand::SetTargetPosition, position as u32);
     }
@@ -53,7 +56,7 @@ pub trait TicBase {
     ///
     /// Example usage:
     /// ```
-    /// tic.setTargetVelocity(-1800000);  // -180 steps per second
+    /// tic.set_target_velocity(-1800000);  // -180 steps per second
     /// ```
     ///
     /// This function sends a "Set target velocity" command to the Tic.  If the
@@ -74,7 +77,7 @@ pub trait TicBase {
     ///
     /// Example usage:
     /// ```
-    /// tic.haltAndSetPosition(0);
+    /// tic.halt_and_set_position(0);
     /// ```
     ///
     /// This function sends a "Halt and set position" command to the Tic.  Besides
@@ -92,7 +95,7 @@ pub trait TicBase {
     ///
     /// Example usage:
     /// ```
-    /// tic.haltAndHold();
+    /// tic.halt_and_hold();
     /// ```
     ///
     /// This function sends a "Halt and hold" command to the Tic.  Besides stopping
@@ -103,7 +106,7 @@ pub trait TicBase {
     /// If the control mode is something other than Serial/I2C/USB, ths
     /// command will be silently ignored.
     ///
-    /// See also deenergize().
+    /// See also [`Self::deenergize()`].
     fn halt_and_hold(&mut self) {
         self.command_quick(TicCommand::HaltAndHold);
     }
@@ -112,7 +115,7 @@ pub trait TicBase {
     ///
     /// See the "Homing" section of the Tic user's guide for details.
     ///
-    /// See also goHomeForward().
+    /// See also [`Self::go_home_forward()`].
     fn go_home_reverse(&mut self) {
         self.command_w7(TicCommand::GoHome, 0);
     }
@@ -129,7 +132,7 @@ pub trait TicBase {
     /// Prevents the "Command timeout" error from happening for some time.
     ///
     /// Example usage:
-    /// ```
+    /// ```rust,ignore
     /// tic.reset_command_timeout();
     /// ```
     ///
@@ -141,7 +144,7 @@ pub trait TicBase {
     /// De-energizes the stepper motor coils.
     ///
     /// Example usage:
-    /// ```
+    /// ```rust,ignore
     /// tic.deenergize();
     /// ```
     ///
@@ -164,7 +167,7 @@ pub trait TicBase {
     /// Sends the Energize command.
     ///
     /// Example usage:
-    /// ```
+    /// ```rust,ignore
     /// tic.energize();
     /// ```
     ///
@@ -178,8 +181,8 @@ pub trait TicBase {
     /// Sends the "Exit safe start" command.
     ///
     /// Example usage:
-    /// ```
-    /// tic.exitSafeStart();
+    /// ```rust,ignore
+    /// tic.exit_safe_start();
     /// ```
     ///
     /// In Serial/I2C/USB control mode, this command causes the safe start
@@ -192,8 +195,8 @@ pub trait TicBase {
     /// Sends the "Enter safe start" command.
     ///
     /// Example usage:
-    /// ```
-    /// tic.enterSafeStart();
+    /// ```rust,ignore
+    /// tic.enter_safe_start();
     /// ```
     ///
     /// This command has no effect if safe-start is disabled in the Tic's settings.
@@ -211,7 +214,7 @@ pub trait TicBase {
     /// Sends the Reset command.
     ///
     /// Example usage:
-    /// ```
+    /// ```rust,ignore
     /// tic.reset();
     /// ```
     ///
@@ -228,8 +231,8 @@ pub trait TicBase {
     /// Attempts to clear a motor driver error.
     ///
     /// Example usage:
-    /// ```
-    /// tic.clearDriverError();
+    /// ```rust,ignore
+    /// tic.clear_driver_error();
     /// ```
     ///
     /// This function sends a "Clear driver error" command to the Tic.  For more
@@ -241,8 +244,8 @@ pub trait TicBase {
     /// Temporarily sets the maximum speed, in units of steps per 10000 seconds.
     ///
     /// Example usage:
-    /// ```
-    /// tic.setMaxSpeed(5550000);  // 555 steps per second
+    /// ```rust,ignore
+    /// tic.set_max_speed(5550000);  // 555 steps per second
     /// ```
     ///
     /// This function sends a "Set max speed" command to the Tic.  For more
@@ -484,7 +487,7 @@ pub trait TicBase {
     /// This is only relevant if the planning mode from getPlanningMode() is
     /// TicPlanningMode::Position.
     ///
-    /// See also [`set_target_position()`].
+    /// See also [`Self::set_target_position()`].
     fn get_target_position(&mut self) -> i32 {
         self.get_var32(VarOffset::TargetPosition as u8) as i32
     }
@@ -792,11 +795,6 @@ pub trait TicBase {
     ///
     /// If the input is valid, this number is the target position or target
     /// velocity specified by the input.
-    ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getInputAfter
-    /// ```
     ///
     /// See also getInputState().
     fn get_input_after_scaling(&mut self) -> i32 {
