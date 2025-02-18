@@ -7,43 +7,28 @@ use crate::{
 };
 
 pub trait TicBase {
-    fn send_command_header(&mut self, cmd: TicCommand);
     fn command_quick(&mut self, cmd: TicCommand);
     fn command_w32(&mut self, cmd: TicCommand, val: u32);
     fn command_w7(&mut self, cmd: TicCommand, val: u8);
-    fn get_segment(&mut self, cmd: TicCommand, offset: u8, length: u8, buffer: &mut [u8]);
+    fn get_segment(&mut self, cmd: TicCommand, offset: u8, buffer: &mut [u8]);
 
     fn get_var8(&mut self, offset: u8) -> u8 {
-        let mut result = [0u8; 2];
-        self.get_segment(TicCommand::GetVariable, offset, 1, &mut result);
+        let mut result = [0u8; 1];
+        self.get_segment(TicCommand::GetVariable, offset, &mut result);
         result[0]
     }
 
     fn get_var16(&mut self, offset: u8) -> u16 {
         let mut buffer = [0u8; 2];
-        self.get_segment(TicCommand::GetVariable, offset, 2, &mut buffer);
+        self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
         u16::from_le_bytes(buffer)
     }
 
     fn get_var32(&mut self, offset: u8) -> u32 {
         let mut buffer = [0u8; 4];
-        self.get_segment(TicCommand::GetVariable, offset, 4, &mut buffer);
+        self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
         u32::from_le_bytes(buffer)
     }
-
-    /// You can use this function to specify what type of Tic you are using.
-    ///
-    /// Example usage (pick one of the following):
-    /// ```
-    /// tic.setProduct(TicProduct::T500);
-    /// tic.setProduct(TicProduct::T834);
-    /// tic.setProduct(TicProduct::T825);
-    /// tic.setProduct(TicProduct::T249);
-    /// tic.setProduct(TicProduct::Tic36v4);
-    /// ```
-    ///
-    /// This changes the behavior of the [`Self::set_current_limit()`] function.
-    fn set_product(&mut self, product: TicProduct);
 
     fn product(&self) -> TicProduct;
 
@@ -471,7 +456,6 @@ pub trait TicBase {
         self.get_segment(
             TicCommand::GetVariableAndClearErrorsOccurred,
             VarOffset::ErrorsOccurred as u8,
-            4,
             &mut result,
         );
         u32::from_le_bytes(result)
@@ -890,13 +874,13 @@ pub trait TicBase {
     /// This library does not attempt to interpret the settings and say what they
     /// mean.  If you are interested in how the settings are encoded in the Tic's
     /// EEPROM, see the "Settings reference" section of the Tic user's guide.
-    fn get_setting(&mut self, offset: u8, length: u8, buffer: &mut [u8]) {
-        self.get_segment(TicCommand::GetSetting, offset, length, buffer);
+    fn get_setting(&mut self, offset: u8, buffer: &mut [u8]) {
+        self.get_segment(TicCommand::GetSetting, offset, buffer);
     }
 
     /// Returns 0 if the last communication with the device was successful, and
     /// non-zero if there was an error.
-    fn get_last_error() -> u8;
+    fn get_last_error(&self) -> u8;
 
     /// Temporarily sets the stepper motor coil current limit in milliamps.  If
     /// the desired current limit is not available, this function uses the closest

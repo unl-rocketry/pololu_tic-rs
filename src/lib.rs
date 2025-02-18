@@ -4,7 +4,7 @@
 #![no_std]
 
 pub mod base;
-mod serial;
+mod i2c;
 
 #[macro_use]
 extern crate num_derive;
