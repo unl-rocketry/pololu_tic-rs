@@ -1,63 +1,58 @@
 //! Base functions
 
+use embedded_hal::delay;
 use num_traits::FromPrimitive as _;
 
 use crate::{
     TicAgcBottomCurrentLimit, TicAgcCurrentBoostSteps, TicAgcFrequencyLimit, TicAgcMode, TicCommand, TicDecayMode, TicError, TicInputState, TicMiscFlags1, TicMotorDriverError, TicOperationState, TicPin, TicPinState, TicPlanningMode, TicProduct, TicReset, TicStepMode, TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_T249_CURRENT_UNITS
 };
 
-pub(crate) trait TicCommunication {
-    fn command_quick(&mut self, cmd: TicCommand);
-    fn command_w32(&mut self, cmd: TicCommand, val: u32);
-    fn command_w7(&mut self, cmd: TicCommand, val: u8);
-    fn get_segment(&mut self, cmd: TicCommand, offset: u8, buffer: &mut [u8]);
+pub(crate) mod communication {
+    use crate::TicCommand;
 
-    fn get_var8(&mut self, offset: u8) -> u8 {
-        let mut result = [0u8; 1];
-        self.get_segment(TicCommand::GetVariable, offset, &mut result);
-        result[0]
-    }
+    pub trait TicCommunication {
+        fn command_quick(&mut self, cmd: TicCommand);
+        fn command_w32(&mut self, cmd: TicCommand, val: u32);
+        fn command_w7(&mut self, cmd: TicCommand, val: u8);
+        fn get_segment(&mut self, cmd: TicCommand, offset: u8, buffer: &mut [u8]);
 
-    fn get_var16(&mut self, offset: u8) -> u16 {
-        let mut buffer = [0u8; 2];
-        self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
-        u16::from_le_bytes(buffer)
-    }
+        fn get_var8(&mut self, offset: u8) -> u8 {
+            let mut result = [0u8; 1];
+            self.get_segment(TicCommand::GetVariable, offset, &mut result);
+            result[0]
+        }
 
-    fn get_var32(&mut self, offset: u8) -> u32 {
-        let mut buffer = [0u8; 4];
-        self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
-        u32::from_le_bytes(buffer)
+        fn get_var16(&mut self, offset: u8) -> u16 {
+            let mut buffer = [0u8; 2];
+            self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
+            u16::from_le_bytes(buffer)
+        }
+
+        fn get_var32(&mut self, offset: u8) -> u32 {
+            let mut buffer = [0u8; 4];
+            self.get_segment(TicCommand::GetVariable, offset, &mut buffer);
+            u32::from_le_bytes(buffer)
+        }
     }
 }
 
-pub trait TicBase: TicCommunication {
+pub trait TicBase: communication::TicCommunication {
     /// Gets the current Tic product
     fn product(&self) -> TicProduct;
 
     /// Sets the target position of the Tic, in microsteps.
-    ///
-    /// Example usage:
-    /// ```
-    /// tic.set_target_position(100);
-    /// ```
     ///
     /// This function sends a "Set target position" to the Tic.  If the Control
     /// mode is set to Serial/I2C/USB, the Tic will start moving the motor to
     /// reach the target position.  If the control mode is something other than
     /// Serial, this command will be silently ignored.
     ///
-    /// See also [`Self::get_target_position()`].
+    /// See also [`Self::target_position()`].
     fn set_target_position(&mut self, position: i32) {
         self.command_w32(TicCommand::SetTargetPosition, position as u32);
     }
 
     /// Sets the target velocity of the Tic, in microsteps per 10000 seconds.
-    ///
-    /// Example usage:
-    /// ```
-    /// tic.set_target_velocity(-1800000);  // -180 steps per second
-    /// ```
     ///
     /// This function sends a "Set target velocity" command to the Tic.  If the
     /// Control mode is set to Serial/I2C/USB, the Tic will start accelerating or
@@ -66,7 +61,7 @@ pub trait TicBase: TicCommunication {
     /// If the control mode is something other than Serial, this command will be
     /// silently ignored.
     ///
-    /// See also getTargetVelocity().
+    /// See also [`Self::target_velocity()`].
     fn set_target_velocity(&mut self, velocity: i32) {
         self.command_w32(TicCommand::SetTargetVelocity, velocity as u32);
     }
@@ -74,11 +69,6 @@ pub trait TicBase: TicCommunication {
     /// Stops the motor abruptly without respecting the deceleration limit and
     /// sets the "Current position" variable, which represents where the Tic
     /// currently thinks the motor's output is.
-    ///
-    /// Example usage:
-    /// ```
-    /// tic.halt_and_set_position(0);
-    /// ```
     ///
     /// This function sends a "Halt and set position" command to the Tic.  Besides
     /// stopping the motor and setting the current position, this command also
@@ -92,11 +82,6 @@ pub trait TicBase: TicCommunication {
     }
 
     /// Stops the motor abruptly without respecting the deceleration limit.
-    ///
-    /// Example usage:
-    /// ```
-    /// tic.halt_and_hold();
-    /// ```
     ///
     /// This function sends a "Halt and hold" command to the Tic.  Besides stopping
     /// the motor, this command also sets the "Position uncertain" flag (because
@@ -131,22 +116,12 @@ pub trait TicBase: TicCommunication {
 
     /// Prevents the "Command timeout" error from happening for some time.
     ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.reset_command_timeout();
-    /// ```
-    ///
     /// This function sends a "Reset command timeout" command to the Tic.
     fn reset_command_timeout(&mut self) {
         self.command_quick(TicCommand::ResetCommandTimeout);
     }
 
     /// De-energizes the stepper motor coils.
-    ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.deenergize();
-    /// ```
     ///
     /// This function sends a De-energize command to the Tic, causing it to disable
     /// its stepper motor driver.  The motor will stop moving and consuming power.
@@ -159,17 +134,12 @@ pub trait TicBase: TicCommunication {
     /// undo the effect of this command (except it will leave the "Position
     /// uncertain" flag set) and could make the system start up again.
     ///
-    /// See also haltAndHold().
+    /// See also [`Self::halt_and_hold()`].
     fn deenergize(&mut self) {
         self.command_quick(TicCommand::Deenergize);
     }
 
     /// Sends the Energize command.
-    ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.energize();
-    /// ```
     ///
     /// This function sends an Energize command to the Tic, clearing the
     /// "Intentionally de-energized" error bit.  If there are no other errors,
@@ -180,11 +150,6 @@ pub trait TicBase: TicCommunication {
 
     /// Sends the "Exit safe start" command.
     ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.exit_safe_start();
-    /// ```
-    ///
     /// In Serial/I2C/USB control mode, this command causes the safe start
     /// violation error to be cleared for 200 ms.  If there are no other errors,
     /// this allows the system to start up.
@@ -193,11 +158,6 @@ pub trait TicBase: TicCommunication {
     }
 
     /// Sends the "Enter safe start" command.
-    ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.enter_safe_start();
-    /// ```
     ///
     /// This command has no effect if safe-start is disabled in the Tic's settings.
     ///
@@ -213,27 +173,17 @@ pub trait TicBase: TicCommunication {
 
     /// Sends the Reset command.
     ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.reset();
-    /// ```
-    ///
     /// This command makes the Tic forget most parts of its current state.  For
     /// more information, see the Tic user's guide.
-    fn reset(&mut self) {
+    fn reset(&mut self, delay: &mut dyn delay::DelayNs) {
         self.command_quick(TicCommand::Reset);
 
         // The Tic's serial and I2C interfaces will be unreliable for a brief period
         // after the Tic receives the Reset command, so we delay 10 ms here.
-        //delay(10);
+        delay.delay_ms(10);
     }
 
     /// Attempts to clear a motor driver error.
-    ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.clear_driver_error();
-    /// ```
     ///
     /// This function sends a "Clear driver error" command to the Tic.  For more
     /// information, see the Tic user's guide.
@@ -243,30 +193,20 @@ pub trait TicBase: TicCommunication {
 
     /// Temporarily sets the maximum speed, in units of steps per 10000 seconds.
     ///
-    /// Example usage:
-    /// ```rust,ignore
-    /// tic.set_max_speed(5550000);  // 555 steps per second
-    /// ```
-    ///
     /// This function sends a "Set max speed" command to the Tic.  For more
     /// information, see the Tic user's guide.
     ///
-    /// See also getMaxSpeed().
+    /// See also [`Self::max_speed()`].
     fn set_max_speed(&mut self, speed: u32) {
         self.command_w32(TicCommand::SetSpeedMax, speed);
     }
 
     /// Temporarily sets the starting speed, in units of steps per 10000 seconds.
     ///
-    /// Example usage:
-    /// ```
-    /// tic.setStartingSpeed(500000);  // 50 steps per second
-    /// ```
-    ///
     /// This function sends a "Set starting speed" command to the Tic.  For more
     /// information, see the Tic user's guide.
     ///
-    /// See also getStartingSpeed().
+    /// See also [`Self::starting_speed()`].
     fn set_starting_speed(&mut self, speed: u32) {
         self.command_w32(TicCommand::SetStartingSpeed, speed);
     }
@@ -274,15 +214,10 @@ pub trait TicBase: TicCommunication {
     /// Temporarily sets the maximum acceleration, in units of steps per second
     /// per 100 seconds.
     ///
-    /// Example usage:
-    /// ```
-    /// tic.setMaxAccel(10000);  // 100 steps per second per second
-    /// ```
-    ///
     /// This function sends a "Set max acceleration" command to the Tic.  For more
     /// information, see the Tic user's guide.
     ///
-    /// See also getMaxAccel().
+    /// See also [`Self::max_accel()`].
     fn set_max_accel(&mut self, accel: u32) {
         self.command_w32(TicCommand::SetAccelMax, accel);
     }
@@ -290,15 +225,10 @@ pub trait TicBase: TicCommunication {
     /// Temporarily sets the maximum deceleration, in units of steps per second
     /// per 100 seconds.
     ///
-    /// Example usage:
-    /// ```
-    /// tic.setMaxDecel(10000);  // 100 steps per second per second
-    /// ```
-    ///
     /// This function sends a "Set max deceleration" command to the Tic.  For more
     /// information, see the Tic user's guide.
     ///
-    /// See also getMaxDecel().
+    /// See also [`Self::max_decel()`].
     fn set_max_decel(&mut self, decel: u32) {
         self.command_w32(TicCommand::SetDecelMax, decel);
     }
@@ -306,29 +236,19 @@ pub trait TicBase: TicCommunication {
     /// Temporarily sets the stepper motor's step mode, which defines how many
     /// microsteps correspond to one full step.
     ///
-    /// Example usage:
-    /// ```
-    /// tic.setStepMode(TicStepMode::Microstep8);
-    /// ```
-    ///
     /// This function sends a "Set step mode" command to the Tic.  For more
     /// information, see the Tic user's guide.
     ///
-    /// See also getStepMode().
+    /// See also [`Self::step_mode()`].
     fn set_step_mode(&mut self, mode: TicStepMode) {
         self.command_w7(TicCommand::SetStepMode, mode as u8);
     }
 
     /// Temporarily sets the stepper motor driver's decay mode.
     ///
-    /// Example usage:
-    /// ```
-    /// tic.setDecayMode(TicDecayMode::Slow);
-    /// ```
-    ///
     /// The decay modes are documented in the Tic user's guide.
     ///
-    /// See also getDecayMode().
+    /// See also [`Self::decay_mode()`].
     fn set_decay_mode(&mut self, mode: TicDecayMode) {
         self.command_w7(TicCommand::SetDecayMode, mode as u8);
     }
@@ -337,7 +257,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also getAgcMode().
+    /// See also [`Self::agc_mode()`].
     fn set_agc_mode(&mut self, mode: TicAgcMode) {
         self.command_w7(TicCommand::SetAgcOption, (mode as u8) & 0xF);
     }
@@ -346,7 +266,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also getAgcBottomCurrentLimit().
+    /// See also [`Self::agc_bottom_current_limit()`].
     fn set_agc_bottom_current_limit(&mut self, limit: TicAgcBottomCurrentLimit) {
         self.command_w7(TicCommand::SetAgcOption, 0x10 | ((limit as u8) & 0xF));
     }
@@ -355,7 +275,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also getAgcCurrentBoostSteps().
+    /// See also [`Self::agc_current_boost_steps()`].
     fn set_agc_current_boost_steps(&mut self, steps: TicAgcCurrentBoostSteps) {
         self.command_w7(TicCommand::SetAgcOption, 0x20 | ((steps as u8) & 0xF));
     }
@@ -372,24 +292,16 @@ pub trait TicBase: TicCommunication {
     /// Gets the Tic's current operation state, which indicates whether it is
     /// operating normally or in an error state.
     ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getOperationState() != TicOperationState::Normal)
-    /// {
-    ///   // There is an error, or the Tic is starting up.
-    /// }
-    /// ```
-    ///
     /// For more information, see the "Error handling" section of the Tic user's
     /// guide.
-    fn get_operation_state(&mut self) -> Result<TicOperationState, TicError> {
+    fn operation_state(&mut self) -> Result<TicOperationState, TicError> {
         TicOperationState::from_u8(self.get_var8(VarOffset::OperationState as u8))
             .ok_or(TicError::UnknownError)
     }
 
     /// Returns true if the motor driver is energized (trying to send current to
     /// its outputs).
-    fn get_energized(&mut self) -> bool {
+    fn is_energized(&mut self) -> bool {
         (self.get_var8(VarOffset::MiscFlags1 as u8) >> TicMiscFlags1::Energized as u8 & 1) != 0
     }
 
@@ -398,25 +310,25 @@ pub trait TicBase: TicCommunication {
     ///
     /// For more information, see the "Error handling" section of the Tic user's
     /// guide.
-    fn get_position_uncertain(&mut self) -> bool {
+    fn is_position_uncertain(&mut self) -> bool {
         (self.get_var8(VarOffset::MiscFlags1 as u8) >> TicMiscFlags1::PositionUncertain as u8 & 1)
             != 0
     }
 
     /// Returns true if one of the forward limit switches is active.
-    fn get_forward_limit_active(&mut self) -> bool {
+    fn is_forward_limit_active(&mut self) -> bool {
         (self.get_var8(VarOffset::MiscFlags1 as u8) >> TicMiscFlags1::ForwardLimitActive as u8 & 1)
             != 0
     }
 
     /// Returns true if one of the reverse limit switches is active.
-    fn get_reverse_limit_active(&mut self) -> bool {
+    fn is_reverse_limit_active(&mut self) -> bool {
         (self.get_var8(VarOffset::MiscFlags1 as u8) >> TicMiscFlags1::ReverseLimitActive as u8 & 1)
             != 0
     }
 
     /// Returns true if the Tic's homing procedure is running.
-    fn get_homing_active(&mut self) -> bool {
+    fn is_homing_active(&mut self) -> bool {
         (self.get_var8(VarOffset::MiscFlags1 as u8) >> TicMiscFlags1::HomingActive as u8 & 1) != 0
     }
 
@@ -424,16 +336,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// Each bit in the returned register represents a different error.  The bits
     /// are defined in ::TicError enum.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint16_t errors = tic.getErrorStatus();
-    /// if (errors & (1 << (uint8_t)TicError::LowVin))
-    /// {
-    ///   // handle loss of power
-    /// }
-    /// ```
-    fn get_error_status(&mut self) -> u16 {
+    fn error_status(&mut self) -> u16 {
         self.get_var16(VarOffset::ErrorStatus as u8)
     }
 
@@ -444,17 +347,8 @@ pub trait TicBase: TicCommunication {
     /// be able to reliably detect errors with this function.
     ///
     /// Each bit in the returned register represents a different error.  The bits
-    /// are defined in ::TicError enum.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint32_t errors = tic.getErrorsOccurred();
-    /// if (errors & (1 << (uint8_t)TicError::MotorDriverError))
-    /// {
-    ///   // handle a motor driver error
-    /// }
-    /// ```
-    fn get_errors_occurred(&mut self) -> u32 {
+    /// are defined in the [`TicError`] enum.
+    fn errors_occurred(&mut self) -> u32 {
         let mut result = [0u8; 4];
         self.get_segment(
             TicCommand::GetVariableAndClearErrorsOccurred,
@@ -468,16 +362,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// This tells us whether the Tic is sending steps, and if it is sending
     /// steps, tells us whether it is in Target Position or Target Velocity mode.
-    ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getPlanningMode() == TicPlanningMode::TargetPosition)
-    /// {
-    ///     // The Tic is moving the stepper motor to a target position, or has
-    ///     // already reached it and is at rest.
-    /// }
-    /// ```
-    fn get_planning_mode(&mut self) -> Result<TicPlanningMode, TicError> {
+    fn planning_mode(&mut self) -> Result<TicPlanningMode, TicError> {
         TicPlanningMode::from_u8(self.get_var8(VarOffset::PlanningMode as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -488,17 +373,17 @@ pub trait TicBase: TicCommunication {
     /// TicPlanningMode::Position.
     ///
     /// See also [`Self::set_target_position()`].
-    fn get_target_position(&mut self) -> i32 {
+    fn target_position(&mut self) -> i32 {
         self.get_var32(VarOffset::TargetPosition as u8) as i32
     }
 
     /// Gets the target velocity, in microsteps per 10000 seconds.
     ///
-    /// This is only relevant if the planning mode from getPlanningMode() is
-    /// TicPlanningMode::Velocity.
+    /// This is only relevant if the planning mode from [`Self::planning_mode()`] is
+    /// [`TicPlanningMode::TargetVelocity`].
     ///
     /// See also [`Self::set_target_velocity()`].
-    fn get_target_velocity(&mut self) -> i32 {
+    fn target_velocity(&mut self) -> i32 {
         self.get_var32(VarOffset::TargetVelocity as u8) as i32
     }
 
@@ -508,7 +393,7 @@ pub trait TicBase: TicCommunication {
     /// settings.
     ///
     /// See also [`Self::set_max_speed()`].
-    fn get_max_speed(&mut self) -> u32 {
+    fn max_speed(&mut self) -> u32 {
         self.get_var32(VarOffset::SpeedMax as u8)
     }
 
@@ -517,13 +402,8 @@ pub trait TicBase: TicCommunication {
     /// This is the current value, which could differ from the value in the
     /// Tic's settings.
     ///
-    /// Example usage:
-    /// ```
-    /// uint32_t startingSpeed = tic.getStartingSpeed();
-    /// ```
-    ///
-    /// See also setStartingSpeed().
-    fn get_starting_speed(&mut self) -> u32 {
+    /// See also [`Self::set_starting_speed()`].
+    fn starting_speed(&mut self) -> u32 {
         self.get_var32(VarOffset::StartingSpeed as u8)
     }
 
@@ -532,13 +412,8 @@ pub trait TicBase: TicCommunication {
     /// This is the current value, which could differ from the value in the Tic's
     /// settings.
     ///
-    /// Example usage:
-    /// ```
-    /// uint32_t accelMax = tic.getMaxAccel();
-    /// ```
-    ///
-    /// See also setMaxAccel().
-    fn get_max_accel(&mut self) -> u32 {
+    /// See also [`Self::set_max_accel()`].
+    fn max_accel(&mut self) -> u32 {
         self.get_var32(VarOffset::AccelMax as u8)
     }
 
@@ -547,13 +422,8 @@ pub trait TicBase: TicCommunication {
     /// This is the current value, which could differ from the value in the Tic's
     /// settings.
     ///
-    /// Example usage:
-    /// ```
-    /// uint32_t decelMax = tic.getMaxDecel();
-    /// ```
-    ///
-    /// See also setMaxDecel().
-    fn get_max_decel(&mut self) -> u32 {
+    /// See also [`Self::set_max_decel()`].
+    fn max_decel(&mut self) -> u32 {
         self.get_var32(VarOffset::DecelMax as u8)
     }
 
@@ -566,8 +436,8 @@ pub trait TicBase: TicCommunication {
     /// For an example of how to use this this, see the SerialPositionControl
     /// example or the I2CPositionControl exmaple.
     ///
-    /// See also haltAndSetPosition().
-    fn get_current_position(&mut self) -> i32 {
+    /// See also [`Self::halt_and_set_position()`].
+    fn current_position(&mut self) -> i32 {
         self.get_var32(VarOffset::CurrentPosition as u8) as i32
     }
 
@@ -577,12 +447,7 @@ pub trait TicBase: TicCommunication {
     /// Note that this is just the velocity used in the Tic's step planning
     /// algorithms, and it might not correspond to the actual velocity of the
     /// motor for various reasons.
-    ///
-    /// Example usage:
-    /// ```
-    /// int32_t velocity = tic.getCurrentVelocity();
-    /// ```
-    fn get_current_velocity(&mut self) -> i32 {
+    fn current_velocity(&mut self) -> i32 {
         self.get_var32(VarOffset::CurrentVelocity as u8) as i32
     }
 
@@ -593,7 +458,7 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is mainly intended for getting insight into how the Tic's algorithms
     /// work or troubleshooting issues, and most people should not use this.
-    fn get_acting_target_position(&mut self) -> u32 {
+    fn acting_target_position(&mut self) -> u32 {
         self.get_var32(VarOffset::ActingTargetPosition as u8)
     }
 
@@ -605,55 +470,32 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is mainly intended for getting insight into how the Tic's algorithms
     /// work or troubleshooting issues, and most people should not use this.
-    fn get_time_since_last_step(&mut self) -> u32 {
+    fn time_since_last_step(&mut self) -> u32 {
         self.get_var32(VarOffset::TimeSinceLastStep as u8)
     }
 
     /// Gets the cause of the controller's last full microcontroller reset.
     ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getDeviceReset() == TicReset::Brownout)
-    /// {
-    ///   // There was a brownout reset; the power supply could not keep up.
-    /// }
-    /// ```
-    ///
     /// The Reset command (reset()) does not affect this variable.
-    fn get_device_reset(&mut self) -> Result<TicReset, TicError> {
+    fn device_reset_cause(&mut self) -> Result<TicReset, TicError> {
         TicReset::from_u8(self.get_var8(VarOffset::DeviceReset as u8)).ok_or(TicError::UnknownError)
     }
 
     /// Gets the current measurement of the VIN voltage, in millivolts.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint16_t power = tic.getVinVoltage();
-    /// ```
-    fn get_vin_voltage(&mut self) -> u16 {
+    fn vin_voltage(&mut self) -> u16 {
         self.get_var16(VarOffset::VinVoltage as u8)
     }
 
     /// Gets the time since the last full reset of the Tic's microcontroller, in
     /// milliseconds.
     ///
-    /// Example usage:
-    /// ```
-    /// uint32_t upTime = tic.getUpTime();
-    /// ```
-    ///
     /// A Reset command (reset())does not count.
-    fn get_up_time(&mut self) -> u32 {
+    fn up_time(&mut self) -> u32 {
         self.get_var32(VarOffset::UpTime as u8)
     }
 
     /// Gets the raw encoder count measured from the Tic's RX and TX lines.
-    ///
-    /// Example usage:
-    /// ```
-    /// int32_t encoderPosition = getEncoderPosition();
-    /// ```
-    fn get_encoder_position(&mut self) -> i32 {
+    fn encoder_position(&mut self) -> i32 {
         self.get_var32(VarOffset::EncoderPosition as u8) as i32
     }
 
@@ -661,16 +503,7 @@ pub trait TicBase: TicCommunication {
     /// twelfths of a microsecond.
     ///
     /// Returns TicInputNull if the RC input is missing or invalid.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint16_t pulseWidth = tic.getRCPulseWidth();
-    /// if (pulseWidth != TicInputNull && pulseWidth > 18000)
-    /// {
-    ///   // Pulse width is greater than 1500 microseconds.
-    /// }
-    /// ```
-    fn get_rc_pulse_width(&mut self) -> u16 {
+    fn rc_pulse_width(&mut self) -> u16 {
         self.get_var16(VarOffset::RCPulseWidth as u8)
     }
 
@@ -680,16 +513,7 @@ pub trait TicBase: TicCommunication {
     /// Tic's 5V pin (approximately 4.8 V).
     ///
     /// Returns TicInputNull if the analog reading is disabled or not ready.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint16_t reading = getAnalogReading(TicPin::SDA);
-    /// if (reading != TicInputNull && reading < 32768)
-    /// {
-    ///   // The reading is less than about 2.4 V.
-    /// }
-    /// ```
-    fn get_analog_reading(&mut self, pin: TicPin) -> u16 {
+    fn analog_reading(&mut self, pin: TicPin) -> u16 {
         let offset = VarOffset::AnalogReadingSCL as u8 + 2 * pin as u8;
         self.get_var16(offset)
     }
@@ -697,15 +521,7 @@ pub trait TicBase: TicCommunication {
     /// Gets a digital reading from the specified pin.
     ///
     /// Returns `true` for high and `false` for low.
-    ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getDigitalReading(TicPin::RC))
-    /// {
-    ///   // Something is driving the RC pin high.
-    /// }
-    /// ```
-    fn get_digital_reading(&mut self, pin: TicPin) -> bool {
+    fn digital_reading(&mut self, pin: TicPin) -> bool {
         let readings = self.get_var8(VarOffset::DigitalReadings as u8);
         ((readings >> pin as u8) & 1) != 0
     }
@@ -714,61 +530,28 @@ pub trait TicBase: TicCommunication {
     ///
     /// Note that the state might be misleading if the pin is being used as a
     /// serial or I2C pin.
-    ///
-    /// Example usage:
-    ///
-    /// ```
-    /// if (tic.getPinState(TicPin::SCL) == TicPinState::OutputHigh)
-    /// {
-    ///   // SCL is driving high.
-    /// }
-    /// ```
-    fn get_pin_state(&mut self, pin: TicPin) -> Result<TicPinState, TicError> {
+    fn pin_state(&mut self, pin: TicPin) -> Result<TicPinState, TicError> {
         let states = self.get_var8(VarOffset::PinStates as u8);
         TicPinState::from_u8(states >> (2 * pin as u8) & 0b11).ok_or(TicError::UnknownError)
     }
 
     /// Gets the current step mode of the stepper motor.
-    ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getStepMode() == TicStepMode::Microstep8)
-    /// {
-    ///   // The Tic is currently using 1/8 microsteps.
-    /// }
-    /// ```
-    fn get_step_mode(&mut self) -> Result<TicStepMode, TicError> {
+    fn step_mode(&mut self) -> Result<TicStepMode, TicError> {
         TicStepMode::from_u8(self.get_var8(VarOffset::StepMode as u8)).ok_or(TicError::UnknownError)
     }
 
     /// Gets the current decay mode of the stepper motor driver.
     ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getDecayMode() == TicDecayMode::Slow)
-    /// {
-    ///   // The Tic is in slow decay mode.
-    /// }
-    /// ```
-    ///
     /// See [`Self::set_decay_mode()`].
-    fn get_decay_mode(&mut self) -> Result<TicDecayMode, TicError> {
+    fn decay_mode(&mut self) -> Result<TicDecayMode, TicError> {
         TicDecayMode::from_u8(self.get_var8(VarOffset::DecayMode as u8))
             .ok_or(TicError::UnknownError)
     }
 
     /// Gets the current state of the Tic's main input.
     ///
-    /// Example usage:
-    /// ```
-    /// if (tic.getInputState() == TicInputState::Position)
-    /// {
-    ///   // The Tic's input is specifying a target position.
-    /// }
-    /// ```
-    ///
     /// See TicInputState for more information.
-    fn get_input_state(&mut self) -> Result<TicInputState, TicError> {
+    fn input_state(&mut self) -> Result<TicInputState, TicError> {
         TicInputState::from_u8(self.get_var8(VarOffset::InputState as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -778,7 +561,7 @@ pub trait TicBase: TicCommunication {
     /// scaling settings in an RC or analog mode.
     ///
     /// A value of TicInputNull means the input value is not available.
-    fn get_input_after_averaging(&mut self) -> u16 {
+    fn input_after_averaging(&mut self) -> u16 {
         self.get_var16(VarOffset::InputAfterAveraging as u8)
     }
 
@@ -787,7 +570,7 @@ pub trait TicBase: TicCommunication {
     /// scaling settings in an RC or analog mode.
     ///
     /// A value of TicInputNull means the input value is not available.
-    fn get_input_after_hysteresis(&mut self) -> u16 {
+    fn input_after_hysteresis(&mut self) -> u16 {
         self.get_var16(VarOffset::InputAfterHysteresis as u8)
     }
 
@@ -797,14 +580,14 @@ pub trait TicBase: TicCommunication {
     /// velocity specified by the input.
     ///
     /// See also getInputState().
-    fn get_input_after_scaling(&mut self) -> i32 {
+    fn input_after_scaling(&mut self) -> i32 {
         self.get_var32(VarOffset::InputAfterScaling as u8) as i32
     }
 
     /// Gets the cause of the last motor driver error.
     ///
     /// This is only valid for the Tic T249.
-    fn get_last_motor_driver_error(&mut self) -> Result<TicMotorDriverError, TicError> {
+    fn last_motor_driver_error(&mut self) -> Result<TicMotorDriverError, TicError> {
         TicMotorDriverError::from_u8(self.get_var8(VarOffset::LastMotorDriverError as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -814,7 +597,7 @@ pub trait TicBase: TicCommunication {
     /// This is only valid for the Tic T249.
     ///
     /// See also setAgcMode().
-    fn get_agc_mode(&mut self) -> Result<TicAgcMode, TicError> {
+    fn agc_mode(&mut self) -> Result<TicAgcMode, TicError> {
         TicAgcMode::from_u8(self.get_var8(VarOffset::AgcMode as u8)).ok_or(TicError::UnknownError)
     }
 
@@ -823,7 +606,7 @@ pub trait TicBase: TicCommunication {
     /// This is only valid for the Tic T249.
     ///
     /// See also setAgcBottomCurrentLimit().
-    fn get_agc_bottom_current_limit(&mut self) -> Result<TicAgcBottomCurrentLimit, TicError> {
+    fn agc_bottom_current_limit(&mut self) -> Result<TicAgcBottomCurrentLimit, TicError> {
         TicAgcBottomCurrentLimit::from_u8(self.get_var8(VarOffset::AgcBottomCurrentLimit as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -833,7 +616,7 @@ pub trait TicBase: TicCommunication {
     /// This is only valid for the Tic T249.
     ///
     /// See also setAgcCurrentBoostSteps().
-    fn get_agc_current_boost_steps(&mut self) -> Result<TicAgcCurrentBoostSteps, TicError> {
+    fn agc_current_boost_steps(&mut self) -> Result<TicAgcCurrentBoostSteps, TicError> {
         TicAgcCurrentBoostSteps::from_u8(self.get_var8(VarOffset::AgcCurrentBoostSteps as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -843,7 +626,7 @@ pub trait TicBase: TicCommunication {
     /// This is only valid for the Tic T249.
     ///
     /// See also setAgcFrequencyLimit().
-    fn get_agc_frequency_limit(&mut self) -> Result<TicAgcFrequencyLimit, TicError> {
+    fn agc_frequency_limit(&mut self) -> Result<TicAgcFrequencyLimit, TicError> {
         TicAgcFrequencyLimit::from_u8(self.get_var8(VarOffset::AgcFrequencyLimit as u8))
             .ok_or(TicError::UnknownError)
     }
@@ -854,20 +637,13 @@ pub trait TicBase: TicCommunication {
     /// error was one of the causes of the Tic's last motor driver error.
     ///
     /// This is only valid for the Tic 36v4.
-    fn get_last_hp_driver_errors(&mut self) -> u8 {
+    fn last_hp_driver_errors(&mut self) -> u8 {
         self.get_var8(VarOffset::LastHpDriverErrors as u8)
     }
 
     /// Gets a contiguous block of settings from the Tic's EEPROM.
     ///
     /// The maximum length that can be fetched is 15 bytes.
-    ///
-    /// Example usage:
-    /// ```
-    /// // Get the Tic's serial device number.
-    /// uint8_t deviceNumber;
-    /// tic.getSetting(7, 1, &deviceNumber);
-    /// ```
     ///
     /// This library does not attempt to interpret the settings and say what they
     /// mean.  If you are interested in how the settings are encoded in the Tic's
@@ -889,11 +665,6 @@ pub trait TicBase: TicCommunication {
     /// default, this function assumes you are using a Tic T825 or Tic T834.  If
     /// you are using a different kind of Tic, we recommend calling setProduct()
     /// some time before calling setCurrentLimit().
-    ///
-    /// Example usage:
-    /// ```
-    /// tic.setCurrentLimit(500);  // 500 mA
-    /// ```
     ///
     /// This function sends a "Set current limit" command to the Tic.  For more
     /// information about this command and how to choose a good current limit, see
@@ -935,11 +706,6 @@ pub trait TicBase: TicCommunication {
     ///
     /// This is the value being used now, which could differ from the value in the
     /// Tic's settings.
-    ///
-    /// Example usage:
-    /// ```
-    /// uint16_t current = tic.getCurrentLimit();
-    /// ```
     ///
     /// By default, this function assumes you are using a Tic T825 or Tic T834.
     /// If you are using a different kind of Tic, we recommend calling

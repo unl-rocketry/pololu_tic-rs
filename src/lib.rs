@@ -60,7 +60,7 @@ const TIC_INPUT_NULL: u16 = 0xFFFF;
 /// "[Error handling](https://www.pololu.com/docs/0J71/5.4)" section of the Tic
 /// user's guide for more information about what these errors mean.
 ///
-/// See [`base::TicBase::get_error_status()`] and [`base::TicBase::get_errors_occurred()`].
+/// See [`base::TicBase::error_status()`] and [`base::TicBase::errors_occurred()`].
 #[derive(FromPrimitive, ToPrimitive)]
 pub enum TicError {
     IntentionallyDeenergized = 0,

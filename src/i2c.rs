@@ -2,7 +2,7 @@
 
 use embedded_hal::i2c::I2c;
 
-use crate::{base::{TicBase, TicCommunication}, TicCommand, TicProduct};
+use crate::{base::{communication::TicCommunication, TicBase}, TicCommand, TicProduct};
 
 /// I2C interface to a Tic board.
 pub struct TicI2C<I2C> {
