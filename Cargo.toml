@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num-traits = "0.2"
+num-traits = { version = "0.2", default-features = false }
 num-derive = "0.4"
 embedded-hal = "1.0.0"
+thiserror = { version = "2.0.11", default-features = false }
+log = "0.4.25"

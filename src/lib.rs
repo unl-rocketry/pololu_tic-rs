@@ -61,7 +61,7 @@ const TIC_INPUT_NULL: u16 = 0xFFFF;
 /// user's guide for more information about what these errors mean.
 ///
 /// See [`base::TicBase::error_status()`] and [`base::TicBase::errors_occurred()`].
-#[derive(FromPrimitive, ToPrimitive)]
+#[derive(FromPrimitive, ToPrimitive, Debug)]
 pub enum TicError {
     IntentionallyDeenergized = 0,
     MotorDriverError = 1,
@@ -77,14 +77,25 @@ pub enum TicError {
     Format = 18,
     Crc = 19,
     EncoderSkip = 20,
+}
 
-    UnknownError = 0xFF,
+#[derive(thiserror::Error, Debug)]
+pub enum TicHandlerError {
+    #[error("the driver experienced an internal error")]
+    InternalError(TicError),
+
+    #[error("the i2c connection experienced an error")]
+    I2cError,
+
+    #[error("the value could not be parsed")]
+    ParseError,
 }
 
 /// This enum defines the Tic command codes which are used for its serial, I2C,
 /// and USB interface.  These codes are used by the library and you should not
 /// need to use them.
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TicCommand {
     SetTargetPosition = 0xE0,
     SetTargetVelocity = 0xE3,
@@ -115,6 +126,7 @@ pub enum TicCommand {
 ///
 /// See TicBase::getOperationState().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicOperationState {
     Reset = 0,
     Deenergized = 2,
@@ -129,6 +141,7 @@ pub enum TicOperationState {
 ///
 /// See TicBase::getPlanningMode().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicPlanningMode {
     Off = 0,
     TargetPosition = 1,
@@ -140,6 +153,7 @@ pub enum TicPlanningMode {
 ///
 /// See TicBase::getDeviceReset().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicReset {
     PowerUp = 0,
     Brownout = 1,
@@ -154,6 +168,7 @@ pub enum TicReset {
 ///
 /// See TicBase::getDecayMode() and TicBase::setDecayMode().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicDecayMode {
     /// This specifies "Mixed" decay mode on the Tic T825
     /// and "Mixed 50%" on the Tic T824.
@@ -178,6 +193,7 @@ pub enum TicDecayMode {
 ///
 /// See TicBase::getStepMode() and TicBase::setStepMode().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicStepMode {
     Full = 0,
     Half = 1,
@@ -195,6 +211,7 @@ pub enum TicStepMode {
 ///
 /// See TicBase::setAgcMode() and TicBase::getAgcMode().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcMode {
     Off = 0,
     On = 1,
@@ -206,6 +223,7 @@ pub enum TicAgcMode {
 /// See TicBase::setAgcBottomCurrentLimit() and
 /// TicBase:getAgcBottomCurrentLimit().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcBottomCurrentLimit {
     P45 = 0,
     P50 = 1,
@@ -222,6 +240,7 @@ pub enum TicAgcBottomCurrentLimit {
 /// See TicBase::setAgcCurrentBoostSteps() and
 /// TicBase::getAgcCurrentBoostSteps().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcCurrentBoostSteps {
     S5 = 0,
     S7 = 1,
@@ -233,6 +252,7 @@ pub enum TicAgcCurrentBoostSteps {
 ///
 /// See TicBase::setAgcFrequencyLimit() and TicBase::getAgcFrequencyLimit().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcFrequencyLimit {
     Off = 0,
     F225Hz = 1,
@@ -242,6 +262,7 @@ pub enum TicAgcFrequencyLimit {
 
 /// This enum defines the Tic's control pins.
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicPin {
     SCL = 0,
     SDA = 1,
@@ -254,6 +275,7 @@ pub enum TicPin {
 ///
 /// See TicBase::getPinState().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicPinState {
     HighImpedance = 0,
     InputPullUp = 1,
@@ -263,6 +285,7 @@ pub enum TicPinState {
 
 /// This enum defines the possible states of the Tic's main input.
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicInputState {
     /// The input is not ready yet.  More samples are needed, or a command has not
     /// been received yet.
@@ -287,6 +310,7 @@ pub enum TicInputState {
 /// not need to use this directly.  See TicBase::getEnergized() and
 /// TicBase::getPositionUncertain().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicMiscFlags1 {
     Energized = 0,
     PositionUncertain = 1,
@@ -299,6 +323,7 @@ pub enum TicMiscFlags1 {
 ///
 /// See TicBase::getLastMotorDriverError().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicMotorDriverError {
     None = 0,
     OverCurrent = 1,
@@ -309,6 +334,7 @@ pub enum TicMotorDriverError {
 ///
 /// See TicBase::getLastHpDriverErrors().
 #[derive(FromPrimitive, ToPrimitive)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TicHpDriverError {
     OverTemperature = 0,
     OverCurrentA = 1,
