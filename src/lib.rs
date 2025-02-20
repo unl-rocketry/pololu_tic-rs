@@ -20,6 +20,9 @@ extern crate num_derive;
 #[doc(inline)]
 pub use i2c::TicI2C;
 
+#[doc(inline)]
+pub use base::TicBase;
+
 const TIC_03A_CURRENT_TABLE: [u16; 33] = [
     0, 1, 174, 343, 495, 634, 762, 880, 990, 1092, 1189, 1281, 1368, 1452, 1532, 1611, 1687, 1762,
     1835, 1909, 1982, 2056, 2131, 2207, 2285, 2366, 2451, 2540, 2634, 2734, 2843, 2962, 3093,
@@ -52,15 +55,11 @@ const TIC_CURRENT_UNITS: u8 = 32;
 /// Tic T249 native current unit, which is 40 mA.
 const TIC_T249_CURRENT_UNITS: u8 = 40;
 
-/// This is used to represent a null or missing value for some of the Tic's
-/// 16-bit input variables.
-const TIC_INPUT_NULL: u16 = 0xFFFF;
-
 /// This enum defines the Tic's error bits. See the
 /// "[Error handling](https://www.pololu.com/docs/0J71/5.4)" section of the Tic
 /// user's guide for more information about what these errors mean.
 ///
-/// See [`base::TicBase::error_status()`] and [`base::TicBase::errors_occurred()`].
+/// See [`TicBase::error_status()`] and [`base::TicBase::errors_occurred()`].
 #[derive(FromPrimitive, ToPrimitive, Debug)]
 pub enum TicError {
     IntentionallyDeenergized = 0,
@@ -85,14 +84,14 @@ pub enum TicHandlerError {
     InternalError(TicError),
 
     #[error("the i2c connection experienced an error")]
-    I2cError,
+    I2cError(embedded_hal::i2c::ErrorKind),
 
     #[error("the value could not be parsed")]
     ParseError,
 }
 
 /// This enum defines the Tic command codes which are used for its serial, I2C,
-/// and USB interface.  These codes are used by the library and you should not
+/// and USB interface. These codes are used by the library and you should not
 /// need to use them.
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -124,7 +123,7 @@ pub enum TicCommand {
 
 /// This enum defines the possible operation states for the Tic.
 ///
-/// See TicBase::getOperationState().
+/// See [`TicBase::operation_state()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicOperationState {
@@ -139,7 +138,7 @@ pub enum TicOperationState {
 /// This enum defines the possible planning modes for the Tic's step generation
 /// code.
 ///
-/// See TicBase::getPlanningMode().
+/// See [`TicBase::planning_mode()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicPlanningMode {
@@ -151,7 +150,7 @@ pub enum TicPlanningMode {
 /// This enum defines the possible causes of a full microcontroller reset for
 /// the Tic.
 ///
-/// See TicBase::getDeviceReset().
+/// See [`TicBase::device_reset_cause()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicReset {
@@ -166,7 +165,7 @@ pub enum TicReset {
 
 /// This enum defines the possible decay modes.
 ///
-/// See TicBase::getDecayMode() and TicBase::setDecayMode().
+/// See [`TicBase::decay_mode()`] and [`TicBase::set_decay_mode()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicDecayMode {
@@ -191,7 +190,7 @@ pub enum TicDecayMode {
 
 /// This enum defines the possible step modes.
 ///
-/// See TicBase::getStepMode() and TicBase::setStepMode().
+/// See [`TicBase::step_mode()`] and [`TicBase::set_step_mode()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicStepMode {
@@ -209,7 +208,7 @@ pub enum TicStepMode {
 
 /// This enum defines possible AGC modes.
 ///
-/// See TicBase::setAgcMode() and TicBase::getAgcMode().
+/// See [`TicBase::set_agc_mode()`] and [`TicBase::agc_mode()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcMode {
@@ -220,8 +219,7 @@ pub enum TicAgcMode {
 
 /// This enum defines possible AGC buttom current limit percentages.
 ///
-/// See TicBase::setAgcBottomCurrentLimit() and
-/// TicBase:getAgcBottomCurrentLimit().
+/// See [`TicBase::set_agc_bottom_current_limit()`] and [`TicBase::agc_bottom_current_limit()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcBottomCurrentLimit {
@@ -237,8 +235,7 @@ pub enum TicAgcBottomCurrentLimit {
 
 /// This enum defines possible AGC current boost steps values.
 ///
-/// See TicBase::setAgcCurrentBoostSteps() and
-/// TicBase::getAgcCurrentBoostSteps().
+/// See [`TicBase::set_agc_current_boost_steps()`] and [`TicBase::agc_current_boost_steps()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcCurrentBoostSteps {
@@ -250,7 +247,7 @@ pub enum TicAgcCurrentBoostSteps {
 
 /// This enuam defines possible AGC frequency limit values.
 ///
-/// See TicBase::setAgcFrequencyLimit() and TicBase::getAgcFrequencyLimit().
+/// See [`TicBase::set_agc_frequency_limit()`] and [`TicBase::agc_frequency_limit()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicAgcFrequencyLimit {
@@ -298,17 +295,16 @@ pub enum TicInputState {
     Halt = 2,
 
     /// The input is valid and is telling the Tic to go to a target position,
-    /// which you can get with TicBase::getInputAfterScaling().
+    /// which you can get with [`TicBase::input_after_scaling()`].
     Position = 3,
 
     /// The input is valid and is telling the Tic to go to a target velocity,
-    /// which you can get with TicBase::getInputAfterScaling().
+    /// which you can get with [`TicBase::input_after_scaling()`].
     Velocity = 4,
 }
 
 /// This enum defines the bits in the Tic's Misc Flags 1 register.  You should
-/// not need to use this directly.  See TicBase::getEnergized() and
-/// TicBase::getPositionUncertain().
+/// not need to use this directly. See [`TicBase::is_energized()`] and [`TicBase::is_position_uncertain()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicMiscFlags1 {
@@ -321,7 +317,7 @@ pub enum TicMiscFlags1 {
 
 /// This enum defines possible motor driver errors for the Tic T249.
 ///
-/// See TicBase::getLastMotorDriverError().
+/// See [`TicBase::last_motor_driver_error()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicMotorDriverError {
@@ -332,7 +328,7 @@ pub enum TicMotorDriverError {
 
 /// This enum defines the bits in the "Last HP driver errors" variable.
 ///
-/// See TicBase::getLastHpDriverErrors().
+/// See [`TicBase::last_hp_driver_errors()`].
 #[derive(FromPrimitive, ToPrimitive)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum TicHpDriverError {

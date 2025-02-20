@@ -1,6 +1,6 @@
 //! I2C interface to a Tic motor driver board.
 
-use embedded_hal::i2c::I2c;
+use embedded_hal::i2c::{Error, I2c};
 
 use crate::{base::{communication::TicCommunication, TicBase}, TicCommand, TicHandlerError, TicProduct};
 
@@ -41,7 +41,8 @@ impl<I2C: I2c> TicI2C<I2C> {
 // TODO: Properly error handle this stuff!!!
 impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
     fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
-        self.i2c.write(self.address, &[cmd as u8]).unwrap();
+        self.i2c.write(self.address, &[cmd as u8])
+            .map_err(|e| TicHandlerError::I2cError(e.kind()))?;
         Ok(())
     }
 
@@ -49,7 +50,8 @@ impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
         let mut data = [0u8; 5];
         data[0] = cmd as u8;
         data[1..5].copy_from_slice(&val.to_le_bytes());
-        self.i2c.write(self.address, &data).unwrap();
+        self.i2c.write(self.address, &data)
+            .map_err(|e| TicHandlerError::I2cError(e.kind()))?;
         Ok(())
     }
 
@@ -57,13 +59,15 @@ impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
         let mut data = [0u8; 2];
         data[0] = cmd as u8;
         data[1] = val & 0x7F;
-        self.i2c.write(self.address, &data).unwrap();
+        self.i2c.write(self.address, &data)
+            .map_err(|e| TicHandlerError::I2cError(e.kind()))?;
         Ok(())
     }
 
     fn get_segment(&mut self, cmd: TicCommand, offset: u8, buffer: &mut [u8]) -> Result<(), TicHandlerError> {
         let data = [cmd as u8, offset];
-        self.i2c.write_read(self.address, &data, buffer).unwrap();
+        self.i2c.write_read(self.address, &data, buffer)
+            .map_err(|e| TicHandlerError::I2cError(e.kind()))?;
         Ok(())
     }
 }
