@@ -8,8 +8,12 @@ Currently, this driver only supports I²C, and not the Serial control mode which
 Serial control is planned for the future. This driver also only supports `embedded-hal >= 1.0`.
 
 > [!IMPORTANT]
-> The Tic devices utilize I²C clock-stretching, which can cause timeouts and errors on some boards. Ensure you increase
-> the I²C timeout delay on your board if you are getting timeout errors while using this library.
+> The Tic devices utilize I²C clock-stretching, which can cause timeouts and errors on some boards. Ensure
+> you increase the I²C timeout delay on your board if you are getting timeout errors while using this library.
+
+## License
+This library is licensed under the MIT and Apache 2.0 permissive open-source licenses. Please review the terms 
+of these licenses to decide how to incorporate this library into your projects.
 
 ## Example
 A basic example of using this library to set up and control a Tic36v4 is as follows. Ensure you replace
