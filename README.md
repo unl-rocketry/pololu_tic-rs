@@ -7,7 +7,7 @@ the [official Arduino driver](https://github.com/pololu/tic-arduino) does, namel
 Currently, this driver only supports I²C, and not the Serial control mode which the Tic devices support. 
 Serial control is planned for the future. This driver also only supports `embedded-hal >= 1.0`.
 
-> [!NOTE]
+> [!IMPORTANT]
 > The Tic devices utilize I²C clock-stretching, which can cause timeouts and errors on some boards. Ensure you increase
 > the I²C timeout delay on your board if you are getting timeout errors while using this library.
 
