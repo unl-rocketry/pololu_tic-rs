@@ -349,7 +349,7 @@ pub trait TicBase: communication::TicCommunication {
     /// be able to reliably detect errors with this function.
     ///
     /// Each bit in the returned register represents a different error.  The bits
-    /// are defined in the [`TicError`] enum.
+    /// are defined in the [`crate::TicError`] enum.
     fn errors_occurred(&mut self) -> Result<u32, TicHandlerError> {
         let mut result = [0u8; 4];
         self.get_segment(
@@ -372,7 +372,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets the target position, in microsteps.
     ///
     /// This is only relevant if the planning mode from getPlanningMode() is
-    /// TicPlanningMode::Position.
+    /// [`TicPlanningMode::TargetPosition`].
     ///
     /// See also [`Self::set_target_position()`].
     fn target_position(&mut self) -> Result<i32, TicHandlerError> {
@@ -478,7 +478,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets the cause of the controller's last full microcontroller reset.
     ///
-    /// The Reset command (reset()) does not affect this variable.
+    /// The Reset command ([`Self::reset()`]) does not affect this variable.
     fn device_reset_cause(&mut self) -> Result<TicReset, TicHandlerError> {
         TicReset::from_u8(self.get_var8(VarOffset::DeviceReset as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -492,7 +492,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets the time since the last full reset of the Tic's microcontroller, in
     /// milliseconds.
     ///
-    /// A Reset command ([`TicBase::reset()`]) does not count.
+    /// A Reset command ([`Self::reset()`]) does not count.
     fn up_time(&mut self) -> Result<u32, TicHandlerError> {
         self.get_var32(VarOffset::UpTime as u8)
     }
@@ -553,7 +553,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets the current state of the Tic's main input.
     ///
-    /// See TicInputState for more information.
+    /// See [`TicInputState`] for more information.
     fn input_state(&mut self) -> Result<TicInputState, TicHandlerError> {
         TicInputState::from_u8(self.get_var8(VarOffset::InputState as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -582,7 +582,7 @@ pub trait TicBase: communication::TicCommunication {
     /// If the input is valid, this number is the target position or target
     /// velocity specified by the input.
     ///
-    /// See also getInputState().
+    /// See also [`Self::input_state()`].
     fn input_after_scaling(&mut self) -> Result<i32, TicHandlerError> {
         Ok(self.get_var32(VarOffset::InputAfterScaling as u8)? as i32)
     }
@@ -599,7 +599,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also setAgcMode().
+    /// See also [`Self::set_agc_mode()`].
     fn agc_mode(&mut self) -> Result<TicAgcMode, TicHandlerError> {
         TicAgcMode::from_u8(self.get_var8(VarOffset::AgcMode as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -609,7 +609,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also setAgcBottomCurrentLimit().
+    /// See also [`Self::set_agc_bottom_current_limit()`].
     fn agc_bottom_current_limit(&mut self) -> Result<TicAgcBottomCurrentLimit, TicHandlerError> {
         TicAgcBottomCurrentLimit::from_u8(self.get_var8(VarOffset::AgcBottomCurrentLimit as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -619,7 +619,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also setAgcCurrentBoostSteps().
+    /// See also [`Self::set_agc_current_boost_steps()`].
     fn agc_current_boost_steps(&mut self) -> Result<TicAgcCurrentBoostSteps, TicHandlerError> {
         TicAgcCurrentBoostSteps::from_u8(self.get_var8(VarOffset::AgcCurrentBoostSteps as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -629,7 +629,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This is only valid for the Tic T249.
     ///
-    /// See also setAgcFrequencyLimit().
+    /// See also [`Self::set_agc_frequency_limit()`].
     fn agc_frequency_limit(&mut self) -> Result<TicAgcFrequencyLimit, TicHandlerError> {
         TicAgcFrequencyLimit::from_u8(self.get_var8(VarOffset::AgcFrequencyLimit as u8)?)
             .ok_or(TicHandlerError::ParseError)
@@ -664,17 +664,11 @@ pub trait TicBase: communication::TicCommunication {
     /// the desired current limit is not available, this function uses the closest
     /// current limit that is lower than the desired one.
     ///
-    /// When converting the current limit from milliamps to a code to send to the
-    /// Tic, this function needs to know what kind of Tic you are using.  By
-    /// default, this function assumes you are using a Tic T825 or Tic T834.  If
-    /// you are using a different kind of Tic, we recommend calling setProduct()
-    /// some time before calling setCurrentLimit().
-    ///
     /// This function sends a "Set current limit" command to the Tic.  For more
     /// information about this command and how to choose a good current limit, see
     /// the Tic user's guide.
     ///
-    /// See also getCurrentLimit().
+    /// See also [`Self::current_limit()`].
     fn set_current_limit(&mut self, limit: u16) -> Result<(), TicHandlerError> {
         let mut code = 0;
 
@@ -713,11 +707,7 @@ pub trait TicBase: communication::TicCommunication {
     /// This is the value being used now, which could differ from the value in the
     /// Tic's settings.
     ///
-    /// By default, this function assumes you are using a Tic T825 or Tic T834.
-    /// If you are using a different kind of Tic, we recommend calling
-    /// setProduct() some time before calling getCurrentLimit().
-    ///
-    /// See also setCurrentLimit().
+    /// See also [`Self::set_current_limit()`].
     fn current_limit(&mut self) -> Result<u16, TicHandlerError> {
         let mut code = self.get_var8(VarOffset::CurrentLimit as u8)? as u16;
         Ok(if self.product() == TicProduct::T500 {
