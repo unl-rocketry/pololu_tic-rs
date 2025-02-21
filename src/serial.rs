@@ -1,6 +1,6 @@
 //! Serial interface to a Tic motor driver board.
 
-use embedded_io::{Read, Write};
+use embedded_io::{Error, Read, Write};
 
 use crate::{
     base::{communication::TicCommunication, TicBase},
@@ -8,16 +8,13 @@ use crate::{
 };
 
 /// I2C interface to a Tic board.
-pub struct TicSerial<S: Write + Read> {
+pub struct TicSerial<S> {
     stream: S,
     product: TicProduct,
     device_number: u8,
 }
 
-impl<S: Write + Read> TicSerial<S>
-where
-    TicHandlerError: From<<S as embedded_io::ErrorType>::Error>,
-{
+impl<S: Write + Read> TicSerial<S> {
     pub fn new_default(stream: S, product: TicProduct) -> Self {
         Self {
             stream,
@@ -36,9 +33,10 @@ where
 
     fn send_command_header(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
         match self.device_number {
-            255 => self.stream.write_all(&[cmd as u8])?,
+            255 => self.stream.write_all(&[cmd as u8])
+                .map_err(|e| TicHandlerError::StreamError(e.kind()))?,
             _ => {
-                self.stream.write_all(&[0xAA])?;
+                self.stream.write_all(&[0xAA]).map_err(|e| TicHandlerError::StreamError(e.kind()))?;
                 self.serial_w7(self.device_number)?;
                 self.serial_w7(cmd as u8)?;
             }
@@ -48,16 +46,14 @@ where
     }
 
     fn serial_w7(&mut self, val: u8) -> Result<(), TicHandlerError> {
-        self.stream.write_all(&[val & 0x7F])?;
+        self.stream.write_all(&[val & 0x7F])
+            .map_err(|e| TicHandlerError::StreamError(e.kind()))?;
         Ok(())
     }
 }
 
 // TODO: Properly error handle this stuff!!!
-impl<S: Write + Read> TicCommunication for TicSerial<S>
-where
-    TicHandlerError: From<<S as embedded_io::ErrorType>::Error>,
-{
+impl<S: Write + Read> TicCommunication for TicSerial<S> {
     fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
         self.send_command_header(cmd)?;
 
@@ -109,10 +105,7 @@ where
     }
 }
 
-impl<S: Write + Read> TicBase for TicSerial<S>
-where
-    TicHandlerError: From<<S as embedded_io::ErrorType>::Error>,
-{
+impl<S: Write + Read> TicBase for TicSerial<S> {
     fn product(&self) -> TicProduct {
         self.product
     }
