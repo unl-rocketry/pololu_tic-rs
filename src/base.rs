@@ -10,14 +10,14 @@ use crate::{
     TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_T249_CURRENT_UNITS,
 };
 
-pub(crate) mod communication {
+pub mod communication {
     use crate::{TicCommand, TicHandlerError};
 
     pub trait TicCommunication {
         fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError>;
         fn command_w32(&mut self, cmd: TicCommand, val: u32) -> Result<(), TicHandlerError>;
         fn command_w7(&mut self, cmd: TicCommand, val: u8) -> Result<(), TicHandlerError>;
-        fn get_segment(
+        fn block_read(
             &mut self,
             cmd: TicCommand,
             offset: u8,
@@ -26,19 +26,19 @@ pub(crate) mod communication {
 
         fn get_var8(&mut self, offset: u8) -> Result<u8, TicHandlerError> {
             let mut result = [0u8; 1];
-            self.get_segment(TicCommand::GetVariable, offset, &mut result)?;
+            self.block_read(TicCommand::GetVariable, offset, &mut result)?;
             Ok(result[0])
         }
 
         fn get_var16(&mut self, offset: u8) -> Result<u16, TicHandlerError> {
             let mut buffer = [0u8; 2];
-            self.get_segment(TicCommand::GetVariable, offset, &mut buffer)?;
+            self.block_read(TicCommand::GetVariable, offset, &mut buffer)?;
             Ok(u16::from_le_bytes(buffer))
         }
 
         fn get_var32(&mut self, offset: u8) -> Result<u32, TicHandlerError> {
             let mut buffer = [0u8; 4];
-            self.get_segment(TicCommand::GetVariable, offset, &mut buffer)?;
+            self.block_read(TicCommand::GetVariable, offset, &mut buffer)?;
             Ok(u32::from_le_bytes(buffer))
         }
     }
@@ -390,7 +390,7 @@ pub trait TicBase: communication::TicCommunication {
     /// are defined in the [`crate::TicError`] enum.
     fn errors_occurred(&mut self) -> Result<u32, TicHandlerError> {
         let mut result = [0u8; 4];
-        self.get_segment(
+        self.block_read(
             TicCommand::GetVariableAndClearErrorsOccurred,
             VarOffset::ErrorsOccurred as u8,
             &mut result,
@@ -692,7 +692,7 @@ pub trait TicBase: communication::TicCommunication {
     /// mean.  If you are interested in how the settings are encoded in the Tic's
     /// EEPROM, see the "Settings reference" section of the Tic user's guide.
     fn get_setting(&mut self, offset: u8, buffer: &mut [u8]) -> Result<(), TicHandlerError> {
-        self.get_segment(TicCommand::GetSetting, offset, buffer)
+        self.block_read(TicCommand::GetSetting, offset, buffer)
     }
 
     /// Temporarily sets the stepper motor coil current limit in milliamps.  If

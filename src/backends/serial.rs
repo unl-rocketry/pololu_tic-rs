@@ -52,7 +52,6 @@ impl<S: Write + Read> TicSerial<S> {
     }
 }
 
-// TODO: Properly error handle this stuff!!!
 impl<S: Write + Read> TicCommunication for TicSerial<S> {
     fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
         self.send_command_header(cmd)?;
@@ -87,7 +86,7 @@ impl<S: Write + Read> TicCommunication for TicSerial<S> {
         Ok(())
     }
 
-    fn get_segment(
+    fn block_read(
         &mut self,
         cmd: TicCommand,
         offset: u8,

@@ -17,7 +17,7 @@ pub struct TicI2C<I2C: I2c> {
 impl<I2C: I2c> TicI2C<I2C> {
     const DEFAULT_ADDR: u8 = 14;
 
-    pub fn new_default(i2c: I2C, product: TicProduct) -> Self {
+    pub const fn new_default(i2c: I2C, product: TicProduct) -> Self {
         Self {
             address: Self::DEFAULT_ADDR,
             i2c,
@@ -25,7 +25,7 @@ impl<I2C: I2c> TicI2C<I2C> {
         }
     }
 
-    pub fn new_with_address(i2c: I2C, product: TicProduct, address: u8) -> Self {
+    pub const fn new_with_address(i2c: I2C, product: TicProduct, address: u8) -> Self {
         Self {
             address,
             i2c,
@@ -33,7 +33,7 @@ impl<I2C: I2c> TicI2C<I2C> {
         }
     }
 
-    pub fn get_address(&self) -> u8 {
+    pub const fn get_address(&self) -> u8 {
         self.address
     }
 }
@@ -67,7 +67,7 @@ impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
         Ok(())
     }
 
-    fn get_segment(
+    fn block_read(
         &mut self,
         cmd: TicCommand,
         offset: u8,

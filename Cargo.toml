@@ -7,7 +7,7 @@ repository = "https://github.com/unl-rocketry/pololu_tic-rs"
 description = """
 An embedded-hal driver to control the Tic series of stepper motor controllers
 created by Pololu.
-""""
+"""
 keywords = ["embedded-hal-driver", "motor", "stepper"]
 categories = ["embedded", "hardware-support", "no-std"]
 readme = "README.md"
@@ -15,8 +15,10 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["i2c"]
+std = ["thiserror/std", "num-traits/std"]
 i2c = []
-serial = ["embedded-io"]
+serial = ["dep:embedded-io"]
+usb = ["std", "dep:nusb"]
 
 
 [dependencies]
@@ -24,7 +26,12 @@ num-traits = { version = "0.2", default-features = false }
 num-derive = "0.4"
 embedded-hal = "1.0"
 thiserror = { version = "2.0", default-features = false }
+
+# Required for embedded-hal serial
 embedded-io = { version = "0.6", optional = true }
+
+# Required for USB communication
+nusb = { version = "0.1", optional = true }
 
 
 [package.metadata.docs.rs]

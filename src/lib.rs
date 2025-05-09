@@ -38,26 +38,34 @@
 #![deny(unsafe_code)]
 #![no_std]
 
+#[cfg(feature = "std")]
+extern crate std;
+
 mod base;
 
-#[cfg(feature = "i2c")]
-mod i2c;
-#[cfg(feature = "serial")]
-mod serial;
-
-#[cfg(not(any(feature = "i2c", feature = "serial")))]
-compile_error!("At least one interface feature must be enabled!");
+mod backends {
+    #[cfg(feature = "i2c")]
+    pub mod i2c;
+    #[cfg(feature = "serial")]
+    pub mod serial;
+    #[cfg(feature = "usb")]
+    pub mod usb;
+}
 
 #[macro_use]
 extern crate num_derive;
 
 #[doc(inline)]
 #[cfg(feature = "i2c")]
-pub use i2c::TicI2C;
+pub use backends::i2c::TicI2C;
 
 #[doc(inline)]
 #[cfg(feature = "serial")]
-pub use serial::TicSerial;
+pub use backends::serial::TicSerial;
+
+#[doc(inline)]
+#[cfg(feature = "usb")]
+pub use backends::usb::TicUsb;
 
 #[doc(inline)]
 pub use base::TicBase;
@@ -69,6 +77,7 @@ const TIC_03A_CURRENT_TABLE: [u16; 33] = [
 
 /// The type of Tic driver that is being represented.
 #[derive(FromPrimitive, ToPrimitive, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum TicProduct {
     /// An unknown driver. Used if not provided, as the default.
     Unknown = 0,
@@ -78,10 +87,12 @@ pub enum TicProduct {
     T834 = 2,
     /// [Tic T500](https://www.pololu.com/product/3134)
     T500 = 3,
+    /// Not available on the website.
+    N825 = 4,
     /// [Tic T249](https://www.pololu.com/product/3138)
-    T249 = 4,
-    /// [Tic T825](https://www.pololu.com/product/3130)
-    Tic36v4 = 5,
+    T249 = 5,
+    /// [Tic 36v4](https://www.pololu.com/product/3140)
+    Tic36v4 = 6,
 }
 
 /// This constant is used by the library to convert between milliamps and the
@@ -167,6 +178,18 @@ pub enum TicHandlerError {
     #[cfg(feature = "serial")]
     #[error("the serial communication experienced an error")]
     StreamError(embedded_io::ErrorKind),
+
+    #[cfg(feature = "usb")]
+    #[error("internal nusb error")]
+    NusbError(nusb::Error),
+
+    #[cfg(feature = "usb")]
+    #[error("the USB communication experienced a transfer error")]
+    UsbTransferError(nusb::transfer::TransferError),
+
+    #[cfg(feature = "usb")]
+    #[error("the target USB device is invalid")]
+    UsbInvalidDevice(u16),
 
     #[error("the value could not be parsed")]
     ParseError,
@@ -255,11 +278,11 @@ pub enum TicDecayMode {
     Fast = 2,
 
     /// This specifies "Mixed 25%" decay mode on the Tic T824
-    /// and is the same as TicDecayMode::Mixed on the Tic T825.
+    /// and is the same as [`TicDecayMode::Mixed`] on the Tic T825.
     Mixed25 = 3,
 
     /// This specifies "Mixed 75%" decay mode on the Tic T824
-    /// and is the same as TicDecayMode::Mixed on the Tic T825.
+    /// and is the same as [`TicDecayMode::Mixed`] on the Tic T825.
     Mixed75 = 4,
 }
 
