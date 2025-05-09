@@ -44,6 +44,10 @@ pub(crate) mod communication {
     }
 }
 
+/// Base functions implemented by all Tic devices.
+///
+/// This trait builds off a common interface to produce all the controls that
+/// the Tic devices supply.
 pub trait TicBase: communication::TicCommunication {
     /// Gets the current Tic product
     fn product(&self) -> TicProduct;

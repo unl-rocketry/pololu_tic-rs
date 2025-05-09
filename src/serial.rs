@@ -7,7 +7,7 @@ use crate::{
     TicCommand, TicHandlerError, TicProduct,
 };
 
-/// I2C interface to a Tic board.
+/// UART serial interface to a Tic board.
 pub struct TicSerial<S> {
     stream: S,
     product: TicProduct,
@@ -72,7 +72,7 @@ impl<S: Write + Read> TicCommunication for TicSerial<S> {
             (((val >> 7) & 1) | ((val >> 14) & 2) | ((val >> 21) & 4) | ((val >> 28) & 8)) as u8,
         )?;
 
-        self.serial_w7((val >> 0) as u8)?; // least significant byte with MSb cleared
+        self.serial_w7((val) as u8)?; // least significant byte with MSb cleared
         self.serial_w7((val >> 8) as u8)?;
         self.serial_w7((val >> 16) as u8)?;
         self.serial_w7((val >> 24) as u8)?; // most significant byte with MSb cleared

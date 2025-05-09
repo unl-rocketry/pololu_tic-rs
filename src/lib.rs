@@ -30,15 +30,18 @@
 #![deny(unsafe_code)]
 #![no_std]
 
-pub mod base;
-pub mod i2c;
-pub mod serial;
+mod base;
+mod i2c;
+mod serial;
 
 #[macro_use]
 extern crate num_derive;
 
 #[doc(inline)]
 pub use i2c::TicI2C;
+
+#[doc(inline)]
+pub use serial::TicSerial;
 
 #[doc(inline)]
 pub use base::TicBase;
@@ -75,20 +78,57 @@ const TIC_CURRENT_UNITS: u8 = 32;
 const TIC_T249_CURRENT_UNITS: u8 = 40;
 
 /// This enum defines the Tic's error bits. See the
-/// "[Error handling](https://www.pololu.com/docs/0J71/5.4)" section of the Tic
-/// user's guide for more information about what these errors mean.
+/// [**Error handling**](https://www.pololu.com/docs/0J71/5.4) section of
+/// the Tic user's guide for more information about what these errors mean.
 ///
-/// See [`TicBase::error_status()`] and [`base::TicBase::errors_occurred()`].
+/// See [`TicBase::error_status()`] and [`TicBase::errors_occurred()`].
 #[derive(FromPrimitive, ToPrimitive, Debug)]
 pub enum TicError {
+    /// The "Intentionally de-energized" error bit is 0 when the Tic starts up.
+    /// It can be set with the "De-energize" command and cleared with the
+    /// "Energize" command.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-int-deenergized)
     IntentionallyDeenergized = 0,
+    /// Indicates that motor driver IC on the Tic has detected a problem and
+    /// reported it to the main microcontroller
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-motor-driver-error)
     MotorDriverError = 1,
+    /// Indicates that the voltage on VIN has dropped well below the minimum
+    /// operating voltage.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-low-vin)
     LowVin = 2,
+    /// Indicates that one of the pins configured as a kill switch is in its active state.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-kill-switch)
     KillSwitch = 3,
+    /// Indicates that the Tic’s main input signal is not valid, so it cannot be
+    /// used to set the target position or velocity.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-required-input-invalid)
     RequiredInputInvalid = 4,
+    /// Indicates that something went wrong with the I²C or TTL serial
+    /// communication.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     SerialError = 5,
+    /// Whenever the Tic’s control mode is “Serial / I²C / USB” and that time
+    /// exceeds the timeout period, the Tic sets the “Command timeout” error
+    /// bit.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     CommandTimeout = 6,
+    /// The Tic’s safe start feature helps to avoid unexpectedly powering the
+    /// motor in speed control modes and in “Serial / I²C / USB” mode.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-safe-start)
     SafeStartViolation = 7,
+    /// The Tic reports an “ERR line high” error if it is not driving its ERR
+    /// pin high and the digital reading on the ERR pin input is high.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-err-high)
     ErrLineHigh = 8,
     SerialFraming = 16,
     RxOverrun = 17,
