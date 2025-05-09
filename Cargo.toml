@@ -1,6 +1,6 @@
 [package]
 name = "pololu_tic"
-version = "0.2.0"
+version = "0.2.0-beta.1"
 edition = "2024"
 authors = ["G2-Games <ke0bhogsg@gmail.com>"]
 repository = "https://github.com/unl-rocketry/pololu_tic-rs"
