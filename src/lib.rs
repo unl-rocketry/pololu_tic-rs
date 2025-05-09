@@ -45,6 +45,9 @@ mod i2c;
 #[cfg(feature = "serial")]
 mod serial;
 
+#[cfg(not(any(feature = "i2c", feature = "serial")))]
+compile_error!("At least one interface feature must be enabled!");
+
 #[macro_use]
 extern crate num_derive;
 
