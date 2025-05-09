@@ -4,13 +4,21 @@
 //! Currently this library only supports the `I2C` interface of the boards,
 //! but serial support is planned.
 //!
-//! This library supports the same boards the equivalent
-//! [Arduino library](https://github.com/pololu/tic-arduino/) supports,
-//! currently the `T500`, `T834`, `T825`, `T249`, `36v4` are supported.
+//! This library supports the same boards that the equivalent
+//! [Arduino library](https://github.com/pololu/tic-arduino/) supports.
+//! Currently the `T500`, `T834`, `T825`, `T249`, `36v4` are supported.
+//!
+//! ## Feature Flags
+//! This crate has a few feature flags to enable or disable support for different interfaces.
+//!
+//!  - `i2c` (default): Enables support for the I²C interface
+//!  - `serial`: Enables support for the UART Serial interface
 //!
 //! ## Example
-//! A basic example of using this library to set up and control a Tic36v4 is as follows. Ensure you replace
-//! `<i2c_bus>` with your platform's `embedded_hal` I²C interface.
+//! A basic example of using this library to set up and control a Tic36v4 is as
+//! follows. Ensure you replace `<i2c_bus>` with your platform's `embedded_hal`
+//! I²C interface.
+//!
 //! ```rust,ignore
 //! use pololu_tic::{TicBase, TicI2C, TicProduct};
 //!
