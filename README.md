@@ -1,4 +1,4 @@
-# Pololu Tic
+# Pololu Tic Rust Driver
 A Rust [`embedded-hal`](https://docs.rs/embedded-hal/latest/embedded_hal/) library for controlling the 
 [Pololu Tic](https://www.pololu.com/tic) series of stepper motor drivers. It supports the same devices 
 the [official Arduino driver](https://github.com/pololu/tic-arduino) does, namely the `T500`, `T834`, 
