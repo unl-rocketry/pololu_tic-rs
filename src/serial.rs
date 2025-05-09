@@ -110,3 +110,9 @@ impl<S: Write + Read> TicBase for TicSerial<S> {
         self.product
     }
 }
+
+impl From<embedded_io::ErrorKind> for TicHandlerError {
+    fn from(err: embedded_io::ErrorKind) -> Self {
+        Self::StreamError(err)
+    }
+}

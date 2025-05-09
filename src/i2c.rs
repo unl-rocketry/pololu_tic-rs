@@ -86,3 +86,9 @@ impl<I2C: I2c> TicBase for TicI2C<I2C> {
         self.product
     }
 }
+
+impl From<embedded_hal::i2c::ErrorKind> for TicHandlerError {
+    fn from(err: embedded_hal::i2c::ErrorKind) -> Self {
+        Self::I2cError(err)
+    }
+}

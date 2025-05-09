@@ -31,16 +31,21 @@
 #![no_std]
 
 mod base;
+
+#[cfg(feature = "i2c")]
 mod i2c;
+#[cfg(feature = "serial")]
 mod serial;
 
 #[macro_use]
 extern crate num_derive;
 
 #[doc(inline)]
+#[cfg(feature = "i2c")]
 pub use i2c::TicI2C;
 
 #[doc(inline)]
+#[cfg(feature = "serial")]
 pub use serial::TicSerial;
 
 #[doc(inline)]
@@ -139,33 +144,25 @@ pub enum TicError {
 
 /// The generic error type for anything in this crate.
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum TicHandlerError {
     #[error("the driver experienced an internal error")]
     InternalError(TicError),
 
-    #[error("the i2c connection experienced an error")]
+    #[cfg(feature = "i2c")]
+    #[error("the i2c communication experienced an error")]
     I2cError(embedded_hal::i2c::ErrorKind),
 
-    #[error("the i2c connection experienced an error")]
+    #[cfg(feature = "serial")]
+    #[error("the serial communication experienced an error")]
     StreamError(embedded_io::ErrorKind),
 
     #[error("the value could not be parsed")]
     ParseError,
 }
 
-impl From<embedded_hal::i2c::ErrorKind> for TicHandlerError {
-    fn from(err: embedded_hal::i2c::ErrorKind) -> Self {
-        Self::I2cError(err)
-    }
-}
-
-impl From<embedded_io::ErrorKind> for TicHandlerError {
-    fn from(err: embedded_io::ErrorKind) -> Self {
-        Self::StreamError(err)
-    }
-}
-
 /// The Tic command codes which are used for its serial, I2C, and USB interface.
+///
 /// These codes are used by the library and you should not need to use them.
 #[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TicCommand {
@@ -362,8 +359,10 @@ pub enum TicInputState {
     Velocity = 4,
 }
 
-/// The bits in the Tic's Misc Flags 1 register.  You should
-/// not need to use this directly. See [`TicBase::is_energized()`] and [`TicBase::is_position_uncertain()`].
+/// The bits in the Tic's Misc Flags 1 register.
+///
+/// You should not need to use this directly. See [`TicBase::is_energized()`] and
+/// [`TicBase::is_position_uncertain()`].
 #[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
 pub enum TicMiscFlags1 {
     Energized = 0,
