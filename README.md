@@ -5,20 +5,25 @@ stepper motor drivers. It supports the same devices the
 [official Arduino driver](https://github.com/pololu/tic-arduino) does, namely
 the `T500`, `T834`, `T825`, `T249`, and `36v4`.
 
-Currently, this driver supports the I²C and Serial control modes which the Tic
-devices support. Serial control is planned for the future. This driver only
-supports `embedded-hal >= 1.0`.
+Currently, this driver supports the I²C, Serial, and USB control modes which the Tic
+devices support. This driver only supports `embedded-hal >= 1.0`.
 
 > [!IMPORTANT]
 > The Tic devices utilize I²C clock-stretching, which can cause timeouts and
 > errors on some chips. Ensure you increase the I²C timeout delay on your chip
 > if you are getting timeout errors while using this library.
 
+> [!WARNING]
+> The USB support is **untested**, **experimental** and the interface may change at
+> **any time**.
+
 ## Feature Flags
 This library has a few feature flags to enable or disable support for different interfaces.
 
- - `i2c` (default): Enables support for the I²C interface
- - `serial`: Enables support for the UART Serial interface
+ - `i2c` (default): Enables support for the I²C interface.
+ - `serial`: Enables support for the UART Serial interface.
+ - `usb`: Enables the USB interface support using `nusb`, and implies the `std` feature.
+ - `std`: Enables `std` support, which enables traits and conversions in a few libraries.
 
 ## License
 This library is licensed under the MIT and Apache 2.0 permissive open-source
