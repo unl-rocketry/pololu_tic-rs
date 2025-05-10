@@ -5,8 +5,8 @@ edition = "2024"
 authors = ["G2-Games <ke0bhogsg@gmail.com>"]
 repository = "https://github.com/unl-rocketry/pololu_tic-rs"
 description = """
-An embedded-hal driver to control the Tic series of stepper motor controllers
-created by Pololu.
+A driver to control the Tic series of stepper motor controllers created by
+Pololu, including: T500, T834, T825, T249, and 36v4.
 """
 keywords = ["embedded-hal-driver", "motor", "stepper"]
 categories = ["embedded", "hardware-support", "no-std"]
@@ -15,23 +15,34 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["i2c"]
-# enabling std allows us to enable the std features of some libraries
+
+# Enables std support. This allows us to enable the std features of some
+# libraries, which allow for derives and `from` implementations
 std = ["thiserror/std", "num-traits/std", "embedded-io?/std"]
+
+# Enables support for the I²C interface
 i2c = ["dep:embedded-hal"]
+
+# Enables support for the Serial interface
 serial = ["dep:embedded-hal", "dep:embedded-io"]
+
+# Enables support for the USB interface. Requires `std`, and does not run on
+# microcontrollers. Only supports platforms that `nusb` supports.
 usb = ["std", "dep:nusb"]
 
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false }
 num-derive = "0.4"
-embedded-hal = { version = "1.0", optional = true }
 thiserror = { version = "2.0", default-features = false }
 
-# Required for embedded-hal serial
+# Enabled when either Serial or I²C are enabled
+embedded-hal = { version = "1.0", optional = true }
+
+# Enabled when Serial is enabled
 embedded-io = { version = "0.6", optional = true }
 
-# Required for USB communication
+# Enabled when USB is enabled
 nusb = { version = "0.1", optional = true }
 
 
