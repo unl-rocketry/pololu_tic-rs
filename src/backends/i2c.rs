@@ -1,6 +1,6 @@
 //! I2C interface to a Tic motor driver board.
 
-use embedded_hal::i2c::{Error, I2c};
+use embedded_hal::{delay::DelayNs, i2c::{Error, I2c}};
 
 use crate::{
     base::{communication::TicCommunication, TicBase},
@@ -8,28 +8,31 @@ use crate::{
 };
 
 /// I2C interface to a Tic board.
-pub struct TicI2C<I2C: I2c> {
+pub struct TicI2C<I2C: I2c, D: DelayNs> {
     address: u8,
     i2c: I2C,
     product: TicProduct,
+    delay: D,
 }
 
-impl<I2C: I2c> TicI2C<I2C> {
+impl<I2C: I2c, D: DelayNs> TicI2C<I2C, D> {
     const DEFAULT_ADDR: u8 = 14;
 
-    pub const fn new_default(i2c: I2C, product: TicProduct) -> Self {
+    pub const fn new_default(i2c: I2C, product: TicProduct, delay: D) -> Self {
         Self {
             address: Self::DEFAULT_ADDR,
             i2c,
             product,
+            delay,
         }
     }
 
-    pub const fn new_with_address(i2c: I2C, product: TicProduct, address: u8) -> Self {
+    pub const fn new_with_address(i2c: I2C, product: TicProduct, delay: D, address: u8) -> Self {
         Self {
             address,
             i2c,
             product,
+            delay,
         }
     }
 
@@ -38,8 +41,7 @@ impl<I2C: I2c> TicI2C<I2C> {
     }
 }
 
-// TODO: Properly error handle this stuff!!!
-impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
+impl<I2C: I2c, D: DelayNs> TicCommunication for TicI2C<I2C, D> {
     fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
         self.i2c
             .write(self.address, &[cmd as u8])
@@ -81,9 +83,13 @@ impl<I2C: I2c> TicCommunication for TicI2C<I2C> {
     }
 }
 
-impl<I2C: I2c> TicBase for TicI2C<I2C> {
+impl<I2C: I2c, D: DelayNs> TicBase for TicI2C<I2C, D> {
     fn product(&self) -> TicProduct {
         self.product
+    }
+
+    fn delay(&mut self, delay: core::time::Duration) {
+        self.delay.delay_ns(delay.as_nanos() as u32);
     }
 }
 

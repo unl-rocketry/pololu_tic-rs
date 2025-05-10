@@ -1,6 +1,5 @@
 //! Base functions
 
-use embedded_hal::delay;
 use num_traits::FromPrimitive as _;
 
 use crate::{
@@ -51,6 +50,8 @@ pub mod communication {
 pub trait TicBase: communication::TicCommunication {
     /// Gets the current Tic product
     fn product(&self) -> TicProduct;
+
+    fn delay(&mut self, delay: core::time::Duration);
 
     /// Sets the target position of the Tic, in microsteps.
     ///
@@ -187,12 +188,12 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This command makes the Tic forget most parts of its current state.  For
     /// more information, see the Tic user's guide.
-    fn reset(&mut self, delay: &mut impl delay::DelayNs) -> Result<(), TicHandlerError> {
+    fn reset(&mut self) -> Result<(), TicHandlerError> {
         self.command_quick(TicCommand::Reset)?;
 
         // The Tic's serial and I2C interfaces will be unreliable for a brief period
         // after the Tic receives the Reset command, so we delay 10 ms here.
-        delay.delay_ms(10);
+        self.delay(core::time::Duration::from_millis(10));
 
         Ok(())
     }

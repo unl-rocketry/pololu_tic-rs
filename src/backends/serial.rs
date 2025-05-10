@@ -1,5 +1,6 @@
 //! Serial interface to a Tic motor driver board.
 
+use embedded_hal::delay::DelayNs;
 use embedded_io::{Error, Read, Write};
 
 use crate::{
@@ -8,26 +9,29 @@ use crate::{
 };
 
 /// UART serial interface to a Tic board.
-pub struct TicSerial<S> {
+pub struct TicSerial<S, D: DelayNs> {
     stream: S,
     product: TicProduct,
     device_number: u8,
+    delay: D,
 }
 
-impl<S: Write + Read> TicSerial<S> {
-    pub fn new_default(stream: S, product: TicProduct) -> Self {
+impl<S: Write + Read, D: DelayNs> TicSerial<S, D> {
+    pub fn new_default(stream: S, product: TicProduct, delay: D) -> Self {
         Self {
             stream,
             product,
             device_number: 255,
+            delay,
         }
     }
 
-    pub fn new_with_number(stream: S, product: TicProduct, device_number: u8) -> Self {
+    pub fn new_with_number(stream: S, product: TicProduct, delay: D, device_number: u8) -> Self {
         Self {
             stream,
             product,
             device_number,
+            delay,
         }
     }
 
@@ -52,7 +56,7 @@ impl<S: Write + Read> TicSerial<S> {
     }
 }
 
-impl<S: Write + Read> TicCommunication for TicSerial<S> {
+impl<S: Write + Read, D: DelayNs> TicCommunication for TicSerial<S, D> {
     fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
         self.send_command_header(cmd)?;
 
@@ -104,9 +108,13 @@ impl<S: Write + Read> TicCommunication for TicSerial<S> {
     }
 }
 
-impl<S: Write + Read> TicBase for TicSerial<S> {
+impl<S: Write + Read, D: DelayNs> TicBase for TicSerial<S, D> {
     fn product(&self) -> TicProduct {
         self.product
+    }
+
+    fn delay(&mut self, delay: core::time::Duration) {
+        self.delay.delay_ns(delay.as_nanos() as u32);
     }
 }
 

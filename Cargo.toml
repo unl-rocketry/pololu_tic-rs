@@ -15,16 +15,17 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["i2c"]
-std = ["thiserror/std", "num-traits/std"]
-i2c = []
-serial = ["dep:embedded-io"]
+# enabling std allows us to enable the std features of some libraries
+std = ["thiserror/std", "num-traits/std", "embedded-io?/std"]
+i2c = ["dep:embedded-hal"]
+serial = ["dep:embedded-hal", "dep:embedded-io"]
 usb = ["std", "dep:nusb"]
 
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false }
 num-derive = "0.4"
-embedded-hal = "1.0"
+embedded-hal = { version = "1.0", optional = true }
 thiserror = { version = "2.0", default-features = false }
 
 # Required for embedded-hal serial

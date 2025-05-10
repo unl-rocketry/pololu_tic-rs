@@ -178,6 +178,10 @@ impl TicBase for TicUsb {
     fn product(&self) -> TicProduct {
         self.product
     }
+
+    fn delay(&mut self, delay: core::time::Duration) {
+        std::thread::sleep(delay)
+    }
 }
 
 impl From<nusb::Error> for TicHandlerError {
