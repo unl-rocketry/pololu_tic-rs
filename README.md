@@ -1,4 +1,7 @@
 # Pololu Tic Rust Driver
+[![Lib.rs Version](https://img.shields.io/crates/v/pololu_tic?style=for-the-badge&logo=rust&label=lib.rs&color=%23a68bfc)](https://lib.rs/crates/pololu_tic)
+[![docs.rs](https://img.shields.io/docsrs/pololu_tic?style=for-the-badge)](https://docs.rs/pololu_tic/)
+
 A Rust [`embedded-hal`](https://docs.rs/embedded-hal/latest/embedded_hal/)
 library for controlling the [Pololu Tic](https://www.pololu.com/tic) series of
 stepper motor drivers. It supports the same devices the
