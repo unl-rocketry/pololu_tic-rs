@@ -3,11 +3,16 @@
 [![docs.rs](https://img.shields.io/docsrs/pololu_tic?style=for-the-badge)](https://docs.rs/pololu_tic/)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/unl-rocketry/pololu_tic-rs/rust_build-test.yml?style=for-the-badge)
 
-A Rust [`embedded-hal`](https://docs.rs/embedded-hal/latest/embedded_hal/)
-library for controlling the [Pololu Tic](https://www.pololu.com/tic) series of
-stepper motor drivers. It supports the same devices the
+A Rust crate for controlling the [Pololu Tic](https://www.pololu.com/tic) series
+of stepper motor drivers. It supports the same devices the
 [official Arduino driver](https://github.com/pololu/tic-arduino) does, namely
-the `T500`, `T834`, `T825`, `T249`, and `36v4`.
+the `T500`, `T834`, `T825`, `T249`, and `36v4`, along with the USB control mode
+that the [pololu-tic-software](https://github.com/pololu/pololu-tic-software)
+program supports.
+
+This driver by default will work in `no-std` enviroments like microcontrollers,
+but is perfectly suitable for using on other computers with the `usb` feature
+enabled.
 
 Currently, this driver supports the I²C, Serial, and USB control modes which
 the Tic devices support. This driver only supports `embedded-hal >= 1.0`.

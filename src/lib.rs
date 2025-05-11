@@ -1,18 +1,31 @@
-//! # Pololu Tic Driver
-//! A platform agnostic Rust driver for the
-//! [Pololu Tic motor driver](https://www.pololu.com/tic) boards.
-//! Currently this library only supports the `I2C` interface of the boards,
-//! but serial support is planned.
+//! # Pololu Tic Rust Driver
+//! A Rust crate for controlling the [Pololu Tic](https://www.pololu.com/tic) series
+//! of stepper motor drivers. It supports the same devices the
+//! [official Arduino driver](https://github.com/pololu/tic-arduino) does, namely
+//! the `T500`, `T834`, `T825`, `T249`, and `36v4`, along with the USB control mode
+//! that the [pololu-tic-software](https://github.com/pololu/pololu-tic-software)
+//! program supports.
 //!
-//! This library supports the same boards that the equivalent
-//! [Arduino library](https://github.com/pololu/tic-arduino/) supports.
-//! Currently the `T500`, `T834`, `T825`, `T249`, `36v4` are supported.
+//! This driver by default will work in `no-std` enviroments like microcontrollers,
+//! but is perfectly suitable for using on other computers with the `usb` feature
+//! enabled.
+//!
+//! Currently, this driver supports the I²C, Serial, and USB control modes which
+//! the Tic devices support. This driver only supports `embedded-hal >= 1.0`.
 //!
 //! ## Feature Flags
-//! This crate has a few feature flags to enable or disable support for different interfaces.
+//! This library has a few feature flags to enable or disable support for different
+//! interfaces.
 //!
-//!  - `i2c` (default): Enables support for the I²C interface
-//!  - `serial`: Enables support for the UART Serial interface
+//!  - `i2c` (default): Enables support for the I²C interface.
+//!  - `serial`: Enables support for the UART Serial interface.
+//!  - `usb`: Enables the USB interface support using `nusb`, and implies the `std` feature.
+//!  - `std`: Enables `std` support, which enables traits and conversions in a few libraries.
+//!
+//! ## License
+//! This library is licensed under the MIT and Apache 2.0 permissive open-source
+//! licenses. Please review the terms of these licenses to decide how to incorporate
+//! this library into your projects.
 //!
 //! ## Example
 //! A basic example of using this library to set up and control a Tic36v4 is as
