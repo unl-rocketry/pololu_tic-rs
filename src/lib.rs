@@ -81,6 +81,10 @@ pub use backends::serial::TicSerial;
 pub use backends::usb::TicUsb;
 
 #[doc(inline)]
+#[cfg(feature = "usb")]
+pub use backends::usb;
+
+#[doc(inline)]
 pub use base::TicBase;
 
 const TIC_03A_CURRENT_TABLE: [u16; 33] = [
@@ -203,6 +207,9 @@ pub enum TicHandlerError {
     #[cfg(feature = "usb")]
     #[error("the target USB device is invalid")]
     UsbInvalidDevice(u16),
+
+    #[error("the device is not yet initalized")]
+    NotInitalized,
 
     #[error("the value could not be parsed")]
     ParseError,
