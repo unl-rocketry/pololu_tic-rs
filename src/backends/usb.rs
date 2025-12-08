@@ -5,7 +5,7 @@
 use core::time::Duration;
 use std::prelude::rust_2024::*;
 
-use nusb::{transfer::{Control, ControlType, Recipient}, DeviceId};
+use nusb::{transfer::{ControlIn, ControlOut, ControlType, Recipient}, DeviceId, MaybeFuture};
 
 use crate::{
     base::{communication::TicCommunication, TicBase},
@@ -52,8 +52,8 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 ///     );
 /// }
 /// ```
-pub fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
-    let device_list = nusb::list_devices()?
+pub async fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
+    let device_list = nusb::list_devices().await?
         .filter(|d| d.vendor_id() == VENDOR_ID)
         .filter(|d| PRODUCT_IDS.contains(&d.product_id()))
         .filter_map(|d| UsbInfo::new(d).ok())
@@ -114,9 +114,9 @@ impl UsbInfo {
 
     /// Initialize the device, returning a [`Usb`] device which is able to be
     /// operated on.
-    pub fn init(&mut self) -> Result<Usb, HandlerError> {
-        let device = self.usb_device_info.open()?;
-        let usb_interface = device.detach_and_claim_interface(0)?;
+    pub async fn init(&mut self) -> Result<Usb, HandlerError> {
+        let device = self.usb_device_info.open().await?;
+        let usb_interface = device.detach_and_claim_interface(0).await?;
 
         Ok(Usb {
             usb_interface,
@@ -161,18 +161,18 @@ impl Usb {
     ///
     /// It is not available on the [`crate::Serial`] and [`crate::I2c`]
     /// interfaces.
-    pub fn set_setting(&mut self, cmd: u8, data: u16, offset: u16) -> Result<(), HandlerError> {
-        self.usb_interface.control_out_blocking(
-            Control {
+    pub async fn set_setting(&mut self, cmd: u8, data: u16, offset: u16) -> Result<(), HandlerError> {
+        self.usb_interface.control_out(
+            ControlOut {
                 control_type: ControlType::Vendor,
                 recipient: Recipient::Device,
                 request: cmd,
                 value: data,
                 index: offset,
+                data: &[],
             },
-            &[],
             DEFAULT_TIMEOUT
-        )?;
+        ).await?;
 
         Ok(())
     }
@@ -180,49 +180,49 @@ impl Usb {
 
 impl TicCommunication for Usb {
     fn command_quick(&mut self, cmd: Command) -> Result<(), HandlerError> {
-        self.usb_interface.control_out_blocking(
-            Control {
+        self.usb_interface.control_out(
+            ControlOut {
                 control_type: ControlType::Vendor,
                 recipient: Recipient::Device,
                 request: cmd as u8,
                 value: 0,
                 index: 0,
+                data: &[],
             },
-            &[],
             DEFAULT_TIMEOUT
-        )?;
+        ).wait()?;
 
         Ok(())
     }
 
     fn command_w7(&mut self, cmd: Command, val: u8) -> Result<(), HandlerError> {
-        self.usb_interface.control_out_blocking(
-            Control {
+        self.usb_interface.control_out(
+            ControlOut {
                 control_type: ControlType::Vendor,
                 recipient: Recipient::Device,
                 request: cmd as u8,
                 value: val as u16,
                 index: 0,
+                data: &[],
             },
-            &[],
             DEFAULT_TIMEOUT
-        )?;
+        ).wait()?;
 
         Ok(())
     }
 
     fn command_w32(&mut self, cmd: Command, val: u32) -> Result<(), HandlerError> {
-        self.usb_interface.control_out_blocking(
-            Control {
+        self.usb_interface.control_out(
+            ControlOut {
                 control_type: ControlType::Vendor,
                 recipient: Recipient::Device,
                 request: cmd as u8,
                 value: (val & 0x00FF) as u16,
-                index: ((val & 0xFF00) >> 16) as u16
+                index: ((val & 0xFF00) >> 16) as u16,
+                data: &[],
             },
-            &[],
             DEFAULT_TIMEOUT
-        )?;
+        ).wait()?;
 
         Ok(())
     }
@@ -233,17 +233,19 @@ impl TicCommunication for Usb {
         offset: u8,
         buffer: &mut [u8],
     ) -> Result<(), HandlerError> {
-        self.usb_interface.control_in_blocking(
-            Control {
+        let result = self.usb_interface.control_in(
+            ControlIn {
                 control_type: ControlType::Vendor,
                 recipient: Recipient::Device,
                 request: cmd as u8,
                 value: 0,
                 index: offset as u16,
+                length: buffer.len() as u16,
             },
-            buffer,
             DEFAULT_TIMEOUT
-        )?;
+        ).wait()?;
+
+        buffer.copy_from_slice(&result);
 
         Ok(())
     }

@@ -17,15 +17,15 @@
 //! This library has a few feature flags to enable or disable support for different
 //! interfaces.
 //!
-//!  - `i2c` (default): Enables support for the I²C interface.
-//!  - `serial`: Enables support for the UART Serial interface.
-//!  - `usb`: Enables the USB interface support using `nusb`, and implies the `std` feature.
+//!  - `i2c` (default): Enables support for the [I²C interface](I2c).
+//!  - `serial`: Enables support for the [UART Serial interface](Serial).
+//!  - `usb`: Enables support for the [USB interface](usb) using `nusb`, and implies the `std` feature.
 //!  - `std`: Enables `std` support, which enables traits and conversions in a few libraries.
 //!
 //! ## License
-//! This library is licensed under the MIT and Apache 2.0 permissive open-source
-//! licenses. Please review the terms of these licenses to decide how to incorporate
-//! this library into your projects.
+//! This library is dual-licensed under the MIT and Apache 2.0 permissive
+//! open-source licenses. Please review the terms of these licenses to decide
+//! how to incorporate this library into your projects.
 //!
 //! ## Example
 //! A basic example of using this library to set up and control a Tic36v4 is as
