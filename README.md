@@ -36,9 +36,9 @@ interfaces.
  - `std`: Enables `std` support, which enables traits and conversions in a few libraries.
 
 ## License
-This library is licensed under the MIT and Apache 2.0 permissive open-source
-licenses. Please review the terms of these licenses to decide how to incorporate
-this library into your projects.
+This library is dual-licensed under the MIT and Apache 2.0 permissive
+open-source licenses. Please review the terms of these licenses to decide
+how to incorporate this library into your projects.
 
 ## Example
 A basic example of using this library to set up and control a Tic36v4 is as
