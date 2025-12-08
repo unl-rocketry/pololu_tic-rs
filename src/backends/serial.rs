@@ -5,19 +5,19 @@ use embedded_io::{Error, Read, Write};
 
 use crate::{
     base::{communication::TicCommunication, TicBase},
-    TicCommand, TicHandlerError, TicProduct,
+    Command, HandlerError, Product,
 };
 
 /// UART serial interface to a Tic board.
-pub struct TicSerial<S, D: DelayNs> {
+pub struct Serial<S, D: DelayNs> {
     stream: S,
-    product: TicProduct,
+    product: Product,
     device_number: u8,
     delay: D,
 }
 
-impl<S: Write + Read, D: DelayNs> TicSerial<S, D> {
-    pub fn new_default(stream: S, product: TicProduct, delay: D) -> Self {
+impl<S: Write + Read, D: DelayNs> Serial<S, D> {
+    pub fn new_default(stream: S, product: Product, delay: D) -> Self {
         Self {
             stream,
             product,
@@ -26,7 +26,7 @@ impl<S: Write + Read, D: DelayNs> TicSerial<S, D> {
         }
     }
 
-    pub fn new_with_number(stream: S, product: TicProduct, delay: D, device_number: u8) -> Self {
+    pub fn new_with_number(stream: S, product: Product, delay: D, device_number: u8) -> Self {
         Self {
             stream,
             product,
@@ -35,12 +35,12 @@ impl<S: Write + Read, D: DelayNs> TicSerial<S, D> {
         }
     }
 
-    fn send_command_header(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
+    fn send_command_header(&mut self, cmd: Command) -> Result<(), HandlerError> {
         match self.device_number {
             255 => self.stream.write_all(&[cmd as u8])
-                .map_err(|e| TicHandlerError::StreamError(e.kind()))?,
+                .map_err(|e| HandlerError::StreamError(e.kind()))?,
             _ => {
-                self.stream.write_all(&[0xAA]).map_err(|e| TicHandlerError::StreamError(e.kind()))?;
+                self.stream.write_all(&[0xAA]).map_err(|e| HandlerError::StreamError(e.kind()))?;
                 self.serial_w7(self.device_number)?;
                 self.serial_w7(cmd as u8)?;
             }
@@ -49,21 +49,21 @@ impl<S: Write + Read, D: DelayNs> TicSerial<S, D> {
         Ok(())
     }
 
-    fn serial_w7(&mut self, val: u8) -> Result<(), TicHandlerError> {
+    fn serial_w7(&mut self, val: u8) -> Result<(), HandlerError> {
         self.stream.write_all(&[val & 0x7F])
-            .map_err(|e| TicHandlerError::StreamError(e.kind()))?;
+            .map_err(|e| HandlerError::StreamError(e.kind()))?;
         Ok(())
     }
 }
 
-impl<S: Write + Read, D: DelayNs> TicCommunication for TicSerial<S, D> {
-    fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
+impl<S: Write + Read, D: DelayNs> TicCommunication for Serial<S, D> {
+    fn command_quick(&mut self, cmd: Command) -> Result<(), HandlerError> {
         self.send_command_header(cmd)?;
 
         Ok(())
     }
 
-    fn command_w32(&mut self, cmd: TicCommand, val: u32) -> Result<(), TicHandlerError> {
+    fn command_w32(&mut self, cmd: Command, val: u32) -> Result<(), HandlerError> {
         self.send_command_header(cmd)?;
 
         // byte with MSbs:
@@ -83,7 +83,7 @@ impl<S: Write + Read, D: DelayNs> TicCommunication for TicSerial<S, D> {
         Ok(())
     }
 
-    fn command_w7(&mut self, cmd: TicCommand, val: u8) -> Result<(), TicHandlerError> {
+    fn command_w7(&mut self, cmd: Command, val: u8) -> Result<(), HandlerError> {
         self.send_command_header(cmd)?;
         self.serial_w7(val)?;
 
@@ -92,24 +92,24 @@ impl<S: Write + Read, D: DelayNs> TicCommunication for TicSerial<S, D> {
 
     fn block_read(
         &mut self,
-        cmd: TicCommand,
+        cmd: Command,
         offset: u8,
         buffer: &mut [u8],
-    ) -> Result<(), TicHandlerError> {
+    ) -> Result<(), HandlerError> {
         self.send_command_header(cmd)?;
         self.serial_w7(offset & 0x7F)?;
         self.serial_w7((buffer.len() | offset as usize >> 1 & 0x40) as u8)?;
 
         self.stream
             .read_exact(buffer)
-            .map_err(|_| TicHandlerError::StreamError(embedded_io::ErrorKind::Other))?;
+            .map_err(|_| HandlerError::StreamError(embedded_io::ErrorKind::Other))?;
 
         Ok(())
     }
 }
 
-impl<S: Write + Read, D: DelayNs> TicBase for TicSerial<S, D> {
-    fn product(&self) -> TicProduct {
+impl<S: Write + Read, D: DelayNs> TicBase for Serial<S, D> {
+    fn product(&self) -> Product {
         self.product
     }
 
@@ -118,7 +118,7 @@ impl<S: Write + Read, D: DelayNs> TicBase for TicSerial<S, D> {
     }
 }
 
-impl From<embedded_io::ErrorKind> for TicHandlerError {
+impl From<embedded_io::ErrorKind> for HandlerError {
     fn from(err: embedded_io::ErrorKind) -> Self {
         Self::StreamError(err)
     }

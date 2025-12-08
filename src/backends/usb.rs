@@ -9,7 +9,7 @@ use nusb::{transfer::{Control, ControlType, Recipient}, DeviceId};
 
 use crate::{
     base::{communication::TicCommunication, TicBase},
-    TicCommand, TicHandlerError, TicProduct,
+    Command, HandlerError, Product,
 };
 
 const VENDOR_ID: u16 = 0x1FFB;
@@ -35,8 +35,8 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 /// List all Tic devices connected via USB to the computer.
 ///
 /// This function will automatically detect and query any Tic devices attached
-/// to the system, and return a list of [`TicUsbInfo`] structs which can be
-/// queried further to find the device you want.
+/// to the system, and return a list of [`UsbInfo`] structs which can be queried
+/// further to find the device you want.
 ///
 /// # Example:
 /// ```rust,ignore
@@ -52,11 +52,11 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 ///     );
 /// }
 /// ```
-pub fn list_devices() -> Result<Vec<TicUsbInfo>, TicHandlerError> {
+pub fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
     let device_list = nusb::list_devices()?
         .filter(|d| d.vendor_id() == VENDOR_ID)
         .filter(|d| PRODUCT_IDS.contains(&d.product_id()))
-        .filter_map(|d| TicUsbInfo::new(d).ok())
+        .filter_map(|d| UsbInfo::new(d).ok())
         .collect();
 
     Ok(device_list)
@@ -67,35 +67,35 @@ pub fn list_devices() -> Result<Vec<TicUsbInfo>, TicHandlerError> {
 ///
 /// Constructing this struct does not actually initialize the device. In order
 /// to use the device after constructing it, call [`Self::init()`].
-pub struct TicUsbInfo {
+pub struct UsbInfo {
     usb_device_info: nusb::DeviceInfo,
 
     serial_number: String,
     firmware_revision: u16,
     unique_id: DeviceId,
 
-    product: TicProduct,
+    product: Product,
 }
 
 
-impl TicUsbInfo {
+impl UsbInfo {
     /// Create a new USB interface to a Tic device. To actually use the device,
     /// you must call [`Self::init()`] after creating it. Otherwise, only some
     /// basic information is available.
     ///
-    /// This function will return [`TicHandlerError::UsbInvalidDevice`] if the
+    /// This function will return [`HandlerError::UsbInvalidDevice`] if the
     /// device passed to it is not a Tic device. It is recommended to use
     /// [`list_devices()`] to get a list of valid devices which can be used
     /// directly.
-    pub fn new(device_info: nusb::DeviceInfo) -> Result<Self, TicHandlerError> {
+    pub fn new(device_info: nusb::DeviceInfo) -> Result<Self, HandlerError> {
         let product = match device_info.product_id() {
-            PRODUCT_ID_T825 => TicProduct::T825,
-            PRODUCT_ID_T834 => TicProduct::T834,
-            PRODUCT_ID_T500 => TicProduct::T500,
-            PRODUCT_ID_N825 => TicProduct::N825,
-            PRODUCT_ID_T249 => TicProduct::T249,
-            PRODUCT_ID_36V4 => TicProduct::Tic36v4,
-            id => return Err(TicHandlerError::UsbInvalidDevice(id)),
+            PRODUCT_ID_T825 => Product::T825,
+            PRODUCT_ID_T834 => Product::T834,
+            PRODUCT_ID_T500 => Product::T500,
+            PRODUCT_ID_N825 => Product::N825,
+            PRODUCT_ID_T249 => Product::T249,
+            PRODUCT_ID_36V4 => Product::Tic36v4,
+            id => return Err(HandlerError::UsbInvalidDevice(id)),
         };
 
         let serial_number = device_info.serial_number().unwrap_or("").to_owned();
@@ -112,20 +112,20 @@ impl TicUsbInfo {
         })
     }
 
-    /// Initialize the device, returning a [`TicUsb`] device which is able to be
+    /// Initialize the device, returning a [`Usb`] device which is able to be
     /// operated on.
-    pub fn init(&mut self) -> Result<TicUsb, TicHandlerError> {
+    pub fn init(&mut self) -> Result<Usb, HandlerError> {
         let device = self.usb_device_info.open()?;
         let usb_interface = device.detach_and_claim_interface(0)?;
 
-        Ok(TicUsb {
+        Ok(Usb {
             usb_interface,
             product: self.product,
         })
     }
 
-    /// Returns the [`TicProduct`] that the device is.
-    pub fn product(&self) -> TicProduct {
+    /// Returns the [`Product`] that the device is.
+    pub fn product(&self) -> Product {
         self.product
     }
 
@@ -149,19 +149,19 @@ impl TicUsbInfo {
 
 
 /// USB interface to a Tic board.
-pub struct TicUsb {
+pub struct Usb {
     usb_interface: nusb::Interface,
 
-    product: TicProduct,
+    product: Product,
 }
 
-impl TicUsb {
+impl Usb {
     /// This command writes a byte of data to the Tic’s settings (stored in
     /// non-volatile memory) at the specified offset.
     ///
-    /// It is not available on the [`crate::TicSerial`] and [`crate::TicI2C`]
+    /// It is not available on the [`crate::Serial`] and [`crate::I2c`]
     /// interfaces.
-    pub fn set_setting(&mut self, cmd: u8, data: u16, offset: u16) -> Result<(), TicHandlerError> {
+    pub fn set_setting(&mut self, cmd: u8, data: u16, offset: u16) -> Result<(), HandlerError> {
         self.usb_interface.control_out_blocking(
             Control {
                 control_type: ControlType::Vendor,
@@ -178,8 +178,8 @@ impl TicUsb {
     }
 }
 
-impl TicCommunication for TicUsb {
-    fn command_quick(&mut self, cmd: TicCommand) -> Result<(), TicHandlerError> {
+impl TicCommunication for Usb {
+    fn command_quick(&mut self, cmd: Command) -> Result<(), HandlerError> {
         self.usb_interface.control_out_blocking(
             Control {
                 control_type: ControlType::Vendor,
@@ -195,7 +195,7 @@ impl TicCommunication for TicUsb {
         Ok(())
     }
 
-    fn command_w7(&mut self, cmd: TicCommand, val: u8) -> Result<(), TicHandlerError> {
+    fn command_w7(&mut self, cmd: Command, val: u8) -> Result<(), HandlerError> {
         self.usb_interface.control_out_blocking(
             Control {
                 control_type: ControlType::Vendor,
@@ -211,7 +211,7 @@ impl TicCommunication for TicUsb {
         Ok(())
     }
 
-    fn command_w32(&mut self, cmd: TicCommand, val: u32) -> Result<(), TicHandlerError> {
+    fn command_w32(&mut self, cmd: Command, val: u32) -> Result<(), HandlerError> {
         self.usb_interface.control_out_blocking(
             Control {
                 control_type: ControlType::Vendor,
@@ -229,10 +229,10 @@ impl TicCommunication for TicUsb {
 
     fn block_read(
         &mut self,
-        cmd: TicCommand,
+        cmd: Command,
         offset: u8,
         buffer: &mut [u8],
-    ) -> Result<(), TicHandlerError> {
+    ) -> Result<(), HandlerError> {
         self.usb_interface.control_in_blocking(
             Control {
                 control_type: ControlType::Vendor,
@@ -249,8 +249,8 @@ impl TicCommunication for TicUsb {
     }
 }
 
-impl TicBase for TicUsb {
-    fn product(&self) -> TicProduct {
+impl TicBase for Usb {
+    fn product(&self) -> Product {
         self.product
     }
 
@@ -259,13 +259,13 @@ impl TicBase for TicUsb {
     }
 }
 
-impl From<nusb::Error> for TicHandlerError {
+impl From<nusb::Error> for HandlerError {
     fn from(err: nusb::Error) -> Self {
         Self::NusbError(err)
     }
 }
 
-impl From<nusb::transfer::TransferError> for TicHandlerError {
+impl From<nusb::transfer::TransferError> for HandlerError {
     fn from(err: nusb::transfer::TransferError) -> Self {
         Self::UsbTransferError(err)
     }
