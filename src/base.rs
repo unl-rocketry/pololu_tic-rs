@@ -3,10 +3,7 @@
 use num_traits::FromPrimitive as _;
 
 use crate::{
-    AgcBottomCurrentLimit, AgcCurrentBoostSteps, AgcFrequencyLimit, AgcMode,
-    Command, DecayMode, HandlerError, InputState, Flags, MotorDriverError,
-    OperationState, ControlPin, PinState, PlanningMode, Product, ResetCause, StepMode,
-    TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_T249_CURRENT_UNITS,
+    AgcBottomCurrentLimit, AgcCurrentBoostSteps, AgcFrequencyLimit, AgcMode, Command, ControlPin, DecayMode, Flags, HandlerError, InputState, MotorDriverError, OperationState, PinState, PlanningMode, Product, ResetCause, StepMode, TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_INPUT_NULL, TIC_T249_CURRENT_UNITS
 };
 
 pub mod communication {
@@ -83,9 +80,9 @@ pub trait TicBase: communication::TicCommunication {
     /// sets the "Current position" variable, which represents where the Tic
     /// currently thinks the motor's output is.
     ///
-    /// This function sends a "Halt and set position" command to the Tic.  Besides
+    /// This function sends a [`Command::HaltAndSetPosition`] command to the Tic.  Besides
     /// stopping the motor and setting the current position, this command also
-    /// clears the "Postion uncertain" flag, sets the "Input state" to "halt", and
+    /// clears the [`Flags::PositionUncertain`] flag, sets the "Input state" to [`InputState::Halt`], and
     /// clears the "Input after scaling" variable.
     ///
     /// If the control mode is something other than Serial, this command will
@@ -111,7 +108,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Tells the Tic to start its homing procedure in the reverse direction.
     ///
-    /// See the "Homing" section of the Tic user's guide for details.
+    /// See the [**Homing**](https://www.pololu.com/docs/0J71/5.6) section of the Tic user's guide for details.
     ///
     /// See also [`Self::go_home_forward()`].
     fn go_home_reverse(&mut self) -> Result<(), HandlerError> {
@@ -120,7 +117,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Tells the Tic to start its homing procedure in the forward direction.
     ///
-    /// See the "Homing" section of the Tic user's guide for details.
+    /// See the [**Homing**](https://www.pololu.com/docs/0J71/5.6) section of the Tic user's guide for details.
     ///
     /// See also [`Self::go_home_reverse()`].
     fn go_home_forward(&mut self) -> Result<(), HandlerError> {
@@ -138,16 +135,16 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This function sends a De-energize command to the Tic, causing it to disable
     /// its stepper motor driver.  The motor will stop moving and consuming power.
-    /// The Tic will set the "Intentionally de-energized" error bit, turn on its
+    /// The Tic will set the [`crate::Error::IntentionallyDeenergized`] error bit, turn on its
     /// red LED, and drive its ERR line high.  This command also sets the
-    /// "Position uncertain" flag (because the Tic is no longer in control of the
+    /// [`Flags::PositionUncertain`] flag (because the Tic is no longer in control of the
     /// motor's position).
     ///
-    /// Note that the Energize command, which can be sent with energize(), will
-    /// undo the effect of this command (except it will leave the "Position
-    /// uncertain" flag set) and could make the system start up again.
+    /// Note that the Energize command, which can be sent with [`Self::energize()`], will
+    /// undo the effect of this command (except it will leave the
+    /// [`Flags::PositionUncertain`] flag set) and could make the system start up again.
     ///
-    /// See also [`Self::halt_and_hold()`].
+    /// See also [`Self::energize()`].
     fn deenergize(&mut self) -> Result<(), HandlerError> {
         self.command_quick(Command::Deenergize)
     }
@@ -157,6 +154,8 @@ pub trait TicBase: communication::TicCommunication {
     /// This function sends an Energize command to the Tic, clearing the
     /// "Intentionally de-energized" error bit.  If there are no other errors,
     /// this allows the system to start up.
+    ///
+    /// See also [`Self::deenergize()`].
     fn energize(&mut self) -> Result<(), HandlerError> {
         self.command_quick(Command::Energize)
     }
@@ -316,7 +315,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets the Tic's current operation state, which indicates whether it is
     /// operating normally or in an error state.
     ///
-    /// For more information, see the "Error handling" section of the Tic user's
+    /// For more information, see the [**Error handling**](https://www.pololu.com/docs/0J71/5.4) section of the Tic user's
     /// guide.
     fn operation_state(&mut self) -> Result<OperationState, HandlerError> {
         OperationState::from_u8(self.get_var8(VarOffset::OperationState as u8)?)
@@ -335,7 +334,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets a flag that indicates whether there has been external confirmation that
     /// the value of the Tic's "Current position" variable is correct.
     ///
-    /// For more information, see the "Error handling" section of the Tic user's
+    /// For more information, see the [**Error handling**](https://www.pololu.com/docs/0J71/5.4) section of the Tic user's
     /// guide.
     fn is_position_uncertain(&mut self) -> Result<bool, HandlerError> {
         Ok(
@@ -410,7 +409,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets the target position, in microsteps.
     ///
-    /// This is only relevant if the planning mode from getPlanningMode() is
+    /// This is only relevant if the planning mode from [`Self::planning_mode()`] is
     /// [`PlanningMode::TargetPosition`].
     ///
     /// See also [`Self::set_target_position()`].
@@ -473,9 +472,6 @@ pub trait TicBase: communication::TicCommunication {
     /// Note that this just tracks steps that the Tic has commanded the stepper
     /// driver to take; it could be different from the actual position of the
     /// motor for various reasons.
-    ///
-    /// For an example of how to use this this, see the SerialPositionControl
-    /// example or the I2CPositionControl exmaple.
     ///
     /// See also [`Self::halt_and_set_position()`].
     fn current_position(&mut self) -> Result<i32, HandlerError> {
@@ -543,10 +539,13 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets the raw pulse width measured on the Tic's RC input, in units of
     /// twelfths of a microsecond.
-    ///
-    /// Returns TicInputNull if the RC input is missing or invalid.
-    fn rc_pulse_width(&mut self) -> Result<u16, HandlerError> {
+    fn rc_pulse_width(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::RCPulseWidth as u8)
+            .map(|v| if v == TIC_INPUT_NULL {
+                None
+            } else {
+                Some(v)
+            })
     }
 
     /// Gets the analog reading from the specified pin.
@@ -554,7 +553,7 @@ pub trait TicBase: communication::TicCommunication {
     /// The reading is left-justified, so 0xFFFF represents a voltage equal to the
     /// Tic's 5V pin (approximately 4.8 V).
     ///
-    /// Returns TicInputNull if the analog reading is disabled or not ready.
+    /// Returns [`crate::TIC_INPUT_NULL`] if the analog reading is disabled or not ready.
     fn analog_reading(&mut self, pin: ControlPin) -> Result<u16, HandlerError> {
         let offset = VarOffset::AnalogReadingSCL as u8 + 2 * pin as u8;
         self.get_var16(offset)
@@ -562,7 +561,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets a digital reading from the specified pin.
     ///
-    /// Returns `true` for high and `false` for low.
+    /// Returns [`true`] for high and [`false`] for low.
     fn digital_reading(&mut self, pin: ControlPin) -> Result<bool, HandlerError> {
         let readings = self.get_var8(VarOffset::DigitalReadings as u8)?;
         Ok(((readings >> pin as u8) & 1) != 0)
@@ -571,13 +570,15 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets the current state of a pin, i.e. what kind of input or output it is.
     ///
     /// Note that the state might be misleading if the pin is being used as a
-    /// serial or I2C pin.
+    /// serial or I²C pin.
     fn pin_state(&mut self, pin: ControlPin) -> Result<PinState, HandlerError> {
         let states = self.get_var8(VarOffset::PinStates as u8)?;
         PinState::from_u8(states >> (2 * pin as u8) & 0b11).ok_or(HandlerError::ParseError)
     }
 
     /// Gets the current step mode of the stepper motor.
+    ///
+    /// See also [`Self::set_step_mode()`].
     fn step_mode(&mut self) -> Result<StepMode, HandlerError> {
         StepMode::from_u8(self.get_var8(VarOffset::StepMode as u8)?)
             .ok_or(HandlerError::ParseError)
@@ -585,7 +586,7 @@ pub trait TicBase: communication::TicCommunication {
 
     /// Gets the current decay mode of the stepper motor driver.
     ///
-    /// See [`Self::set_decay_mode()`].
+    /// See also [`Self::set_decay_mode()`].
     fn decay_mode(&mut self) -> Result<DecayMode, HandlerError> {
         DecayMode::from_u8(self.get_var8(VarOffset::DecayMode as u8)?)
             .ok_or(HandlerError::ParseError)
@@ -602,19 +603,29 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets a variable used in the process that converts raw RC and analog values
     /// into a motor position or speed.  This is mainly for debugging your input
     /// scaling settings in an RC or analog mode.
-    ///
-    /// A value of TicInputNull means the input value is not available.
-    fn input_after_averaging(&mut self) -> Result<u16, HandlerError> {
+    fn input_after_averaging(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::InputAfterAveraging as u8)
+            .map(|r| {
+                if r == TIC_INPUT_NULL {
+                    None
+                } else {
+                    Some(r)
+                }
+            })
     }
 
     /// Gets a variable used in the process that converts raw RC and analog values
     /// into a motor position or speed.  This is mainly for debugging your input
     /// scaling settings in an RC or analog mode.
-    ///
-    /// A value of TicInputNull means the input value is not available.
-    fn input_after_hysteresis(&mut self) -> Result<u16, HandlerError> {
+    fn input_after_hysteresis(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::InputAfterHysteresis as u8)
+            .map(|r| {
+                if r == TIC_INPUT_NULL {
+                    None
+                } else {
+                    Some(r)
+                }
+            })
     }
 
     /// Gets the value of the Tic's main input after scaling has been applied.
@@ -691,7 +702,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// This library does not attempt to interpret the settings and say what they
     /// mean.  If you are interested in how the settings are encoded in the Tic's
-    /// EEPROM, see the "Settings reference" section of the Tic user's guide.
+    /// EEPROM, see the [Setting reference](https://www.pololu.com/docs/0J71/6) section of the Tic user's guide.
     fn get_setting(&mut self, offset: u8, buffer: &mut [u8]) -> Result<(), HandlerError> {
         self.block_read(Command::GetSetting, offset, buffer)
     }
@@ -700,9 +711,9 @@ pub trait TicBase: communication::TicCommunication {
     /// the desired current limit is not available, this function uses the closest
     /// current limit that is lower than the desired one.
     ///
-    /// This function sends a "Set current limit" command to the Tic.  For more
-    /// information about this command and how to choose a good current limit, see
-    /// the Tic user's guide.
+    /// This function sends a [`Command::SetCurrentLimit`] command to the Tic.  For more
+    /// information about this command and how to choose a good current limit, see the
+    /// command documentation.
     ///
     /// See also [`Self::current_limit()`].
     fn set_current_limit(&mut self, limit: u16) -> Result<(), HandlerError> {

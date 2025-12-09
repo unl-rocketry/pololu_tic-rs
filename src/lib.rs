@@ -27,7 +27,10 @@
 //! open-source licenses. Please review the terms of these licenses to decide
 //! how to incorporate this library into your projects.
 //!
-//! ## Example
+//! ## Examples
+//! More examples can be found in the struct documentation for each interface
+//! type.
+//!
 //! A basic example of using this library to set up and control a Tic36v4 is as
 //! follows. Ensure you replace `<i2c_bus>` with your platform's `embedded_hal`
 //! I²C interface.
@@ -91,6 +94,8 @@ const TIC_03A_CURRENT_TABLE: [u16; 33] = [
     0, 1, 174, 343, 495, 634, 762, 880, 990, 1092, 1189, 1281, 1368, 1452, 1532, 1611, 1687, 1762,
     1835, 1909, 1982, 2056, 2131, 2207, 2285, 2366, 2451, 2540, 2634, 2734, 2843, 2962, 3093,
 ];
+
+pub const TIC_INPUT_NULL: u16 = 0xFFFF;
 
 /// The type of Tic driver that is being represented.
 #[derive(FromPrimitive, ToPrimitive, Clone, Copy, PartialEq, Eq)]
@@ -224,36 +229,57 @@ pub enum HandlerError {
 pub enum Command {
     /// Sets the target position of the Tic, in microsteps.
     ///
-    /// [Read More](https://www.pololu.com/docs/0J71/8#cmd-set-target-position)
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-target-position)
     SetTargetPosition = 0xE0,
     /// Sets the target velocity of the Tic, in microsteps per 10,000 seconds.
     ///
-    ///
+    /// [Read more]()
     SetTargetVelocity = 0xE3,
     /// Stops the motor abruptly without respecting the deceleration limit and sets the “Current position” variable, which represents what position the Tic currently thinks the motor is in. Besides stopping the motor and setting the current position, this command also clears the [`Flags::PositionUncertain`] flag, sets the input state to [`InputState::Halt`], and clears the “input after scaling” variable.
     ///
-    ///
+    /// [Read more]()
     HaltAndSetPosition = 0xEC,
-    /// Stops the motor abruptly without respecting the deceleration limit. Besides stopping the motor, this command also sets the “position uncertain” flag (because the abrupt stop might cause steps to be missed), sets the input state to “halt”, and clears the “input after scaling” variable.
+    /// Stops the motor abruptly without respecting the deceleration limit. Besides stopping the motor, this command also sets the [`Flags::PositionUncertain`] flag (because the abrupt stop might cause steps to be missed), sets the input state to [`InputState::Halt`], and clears the “input after scaling” variable.
     ///
-    ///
+    /// [Read more]()
     HaltAndHold = 0x89,
     /// Starts the Tic’s homing procedure.
     ///
-    ///
+    /// [Read more]()
     GoHome = 0x97,
-    /// If the command timeout is enabled, this command resets it and prevents the “command timeout” error from happening for some time. See [**Section 5.4 - Error handling**](https://www.pololu.com/docs/0J71/5.4) of the Tic user's guide for more information about the command timeout.
+    /// If the command timeout is enabled, this command resets it and prevents the [`Error::CommandTimeout`] error from happening for some time. See [**Section 5.4 - Error handling**](https://www.pololu.com/docs/0J71/5.4) of the Tic user's guide for more information about the command timeout.
     ///
-    ///
+    /// [Read more]()
     ResetCommandTimeout = 0x8C,
-    /// Causes the Tic to de-energize the stepper motor coils by disabling its stepper motor driver. The motor will stop moving and consuming power. This command sets the “position uncertain” flag (because the Tic is no longer in control of the motor’s position); the Tic will also set the [`Error::IntentionallyDeenergized`] error, turn on its red LED, and drive its ERR line high.
+    /// Causes the Tic to de-energize the stepper motor coils by disabling its stepper motor driver. The motor will stop moving and consuming power. This command sets the [`Flags::PositionUncertain`] flag (because the Tic is no longer in control of the motor’s position); the Tic will also set the [`Error::IntentionallyDeenergized`] error, turn on its red LED, and drive its ERR line high.
     ///
     /// [`Command::Energize`] will undo the effect of this command (except it will leave the [`Flags::PositionUncertain`] flag set) and could make the system start up again.
+    ///
+    /// [Read more]()
     Deenergize = 0x86,
     /// A request for the Tic to energize the stepper motor coils by enabling its stepper motor driver. The Tic will clear the [`Error::IntentionallyDeenergized`] error. If there are no other errors, this allows the system to start up.
+    ///
+    /// [Read more]()
     Energize = 0x85,
+    /// Causes the [`Error::SafeStartViolation`] error to be cleared for 200 ms. If there are no other errors, this allows the system to start up. If the control mode is not Serial / I²C / USB, then this command is silently ignored.
+    ///
+    /// [Read more]()
     ExitSafeStart = 0x83,
+    /// If safe start is enabled and the control mode is Serial / I²C / USB, RC speed, analog speed, or encoder speed, this command causes the Tic to stop the motor (using the configured soft error response behavior) and set its [`Error::SafeStartViolation`] error bit. If safe start is disabled, or if the Tic is not in one of the listed modes, this command will cause a brief interruption in motor control (during which the soft error response behavior will be triggered) but otherwise have no effect.
+    ///
+    /// [Read more]()
     EnterSafeStart = 0x8F,
+    /// This command makes the Tic forget most parts of its current state. Specifically, it does the following:
+    /// - Reloads all settings from the Tic’s non-volatile memory and discards any temporary changes to the settings previously made with serial commands (this applies to the step mode, current limit, decay mode, max speed, starting speed, max acceleration, and max deceleration settings)
+    /// - Abruptly halts the motor
+    /// - Resets the motor driver
+    /// - Sets the Tic’s operation state to [`OperationState::Reset`]
+    /// - Clears the last movement command and the current position
+    /// - Clears the encoder position
+    /// - Clears the serial and [`Error::CommandTimeout`] errors and the [`TicBase::errors_occurred`] bits
+    /// - Enters safe start if configured to do so
+    ///
+    /// [Read more]()
     Reset = 0xB0,
     ClearDriverError = 0x8A,
     SetSpeedMax = 0xE6,
@@ -261,6 +287,9 @@ pub enum Command {
     SetAccelMax = 0xEA,
     SetDecelMax = 0xE9,
     SetStepMode = 0x94,
+    /// Temporarily sets the stepper motor coil current limit of the driver on the Tic. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next Reset (or Reinitialize) command or full microcontroller reset.
+    ///
+    /// [Read more]()
     SetCurrentLimit = 0x91,
     SetDecayMode = 0x92,
     SetAgcOption = 0x98,
