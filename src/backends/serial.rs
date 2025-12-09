@@ -4,11 +4,28 @@ use embedded_hal::delay::DelayNs;
 use embedded_io::{Error, Read, Write};
 
 use crate::{
-    base::{communication::TicCommunication, TicBase},
     Command, HandlerError, Product,
+    base::{TicBase, communication::TicCommunication},
 };
 
 /// UART serial interface to a Tic board.
+///
+/// ### Usage Example
+/// ```rust,ignore
+/// use pololu_tic::{TicBase as _, Serial as TicSerial, Product};
+///
+/// let mut tic = TicSerial::new_default(
+///     <serial_stream>,
+///     Product::Tic36v4,
+///     <delay>,
+/// );
+///
+/// tic.set_target_velocity(2000000);
+///
+/// loop {
+///     tic.reset_command_timeout();
+/// }
+/// ```
 pub struct Serial<S, D: DelayNs> {
     stream: S,
     product: Product,
@@ -17,6 +34,7 @@ pub struct Serial<S, D: DelayNs> {
 }
 
 impl<S: Write + Read, D: DelayNs> Serial<S, D> {
+    /// Create a new Tic as a Serial device with default values for the device number.
     pub fn new_default(stream: S, product: Product, delay: D) -> Self {
         Self {
             stream,
@@ -26,6 +44,7 @@ impl<S: Write + Read, D: DelayNs> Serial<S, D> {
         }
     }
 
+    /// Create a new Tic as a Serial device with a custom device number.
     pub fn new_with_number(stream: S, product: Product, delay: D, device_number: u8) -> Self {
         Self {
             stream,
@@ -37,10 +56,14 @@ impl<S: Write + Read, D: DelayNs> Serial<S, D> {
 
     fn send_command_header(&mut self, cmd: Command) -> Result<(), HandlerError> {
         match self.device_number {
-            255 => self.stream.write_all(&[cmd as u8])
+            255 => self
+                .stream
+                .write_all(&[cmd as u8])
                 .map_err(|e| HandlerError::StreamError(e.kind()))?,
             _ => {
-                self.stream.write_all(&[0xAA]).map_err(|e| HandlerError::StreamError(e.kind()))?;
+                self.stream
+                    .write_all(&[0xAA])
+                    .map_err(|e| HandlerError::StreamError(e.kind()))?;
                 self.serial_w7(self.device_number)?;
                 self.serial_w7(cmd as u8)?;
             }
@@ -50,7 +73,8 @@ impl<S: Write + Read, D: DelayNs> Serial<S, D> {
     }
 
     fn serial_w7(&mut self, val: u8) -> Result<(), HandlerError> {
-        self.stream.write_all(&[val & 0x7F])
+        self.stream
+            .write_all(&[val & 0x7F])
             .map_err(|e| HandlerError::StreamError(e.kind()))?;
         Ok(())
     }

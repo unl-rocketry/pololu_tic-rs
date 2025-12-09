@@ -3,8 +3,11 @@
 use num_traits::FromPrimitive as _;
 
 use crate::{
-    AgcBottomCurrentLimit, AgcCurrentBoostSteps, AgcFrequencyLimit, AgcMode, Command, ControlPin, DecayMode, Flags, HandlerError, InputState, MotorDriverError, OperationState, PinState, PlanningMode, Product, ResetCause, StepMode, TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS, TIC_INPUT_NULL, TIC_T249_CURRENT_UNITS
+    Command, HandlerError,
+    Product, TIC_03A_CURRENT_TABLE, TIC_CURRENT_UNITS,
+    TIC_INPUT_NULL, TIC_T249_CURRENT_UNITS,
 };
+use crate::variables::{AgcBottomCurrentLimit, AgcCurrentBoostSteps, AgcMode, DecayMode, OperationState, PlanningMode, ResetCause, StepMode, AgcFrequencyLimit, ControlPin, InputState, MotorDriverError, Flags, PinState};
 
 pub mod communication {
     use crate::{Command, HandlerError};
@@ -48,6 +51,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Gets the current Tic product
     fn product(&self) -> Product;
 
+    /// Pause for an amount of time. For internal use.
     fn delay(&mut self, delay: core::time::Duration);
 
     /// Sets the target position of the Tic, in microsteps.
@@ -305,10 +309,7 @@ pub trait TicBase: communication::TicCommunication {
     /// This is only valid for the Tic T249.
     ///
     /// See also getAgcFrequencyLimit().
-    fn set_agc_frequency_limit(
-        &mut self,
-        limit: AgcFrequencyLimit,
-    ) -> Result<(), HandlerError> {
+    fn set_agc_frequency_limit(&mut self, limit: AgcFrequencyLimit) -> Result<(), HandlerError> {
         self.command_w7(Command::SetAgcOption, 0x30 | ((limit as u8) & 0xF))
     }
 
@@ -325,10 +326,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Returns true if the motor driver is energized (trying to send current to
     /// its outputs).
     fn is_energized(&mut self) -> Result<bool, HandlerError> {
-        Ok(
-            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::Energized as u8 & 1)
-                != 0,
-        )
+        Ok((self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::Energized as u8 & 1) != 0)
     }
 
     /// Gets a flag that indicates whether there has been external confirmation that
@@ -338,8 +336,7 @@ pub trait TicBase: communication::TicCommunication {
     /// guide.
     fn is_position_uncertain(&mut self) -> Result<bool, HandlerError> {
         Ok(
-            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::PositionUncertain as u8
-                & 1)
+            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::PositionUncertain as u8 & 1)
                 != 0,
         )
     }
@@ -347,9 +344,7 @@ pub trait TicBase: communication::TicCommunication {
     /// Returns true if one of the forward limit switches is active.
     fn is_forward_limit_active(&mut self) -> Result<bool, HandlerError> {
         Ok(
-            (self.get_var8(VarOffset::MiscFlags1 as u8)?
-                >> Flags::ForwardLimitActive as u8
-                & 1)
+            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::ForwardLimitActive as u8 & 1)
                 != 0,
         )
     }
@@ -357,19 +352,14 @@ pub trait TicBase: communication::TicCommunication {
     /// Returns true if one of the reverse limit switches is active.
     fn is_reverse_limit_active(&mut self) -> Result<bool, HandlerError> {
         Ok(
-            (self.get_var8(VarOffset::MiscFlags1 as u8)?
-                >> Flags::ReverseLimitActive as u8
-                & 1)
+            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::ReverseLimitActive as u8 & 1)
                 != 0,
         )
     }
 
     /// Returns true if the Tic's homing procedure is running.
     fn is_homing_active(&mut self) -> Result<bool, HandlerError> {
-        Ok(
-            (self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::HomingActive as u8 & 1)
-                != 0,
-        )
+        Ok((self.get_var8(VarOffset::MiscFlags1 as u8)? >> Flags::HomingActive as u8 & 1) != 0)
     }
 
     /// Gets the errors that are currently stopping the motor.
@@ -541,11 +531,7 @@ pub trait TicBase: communication::TicCommunication {
     /// twelfths of a microsecond.
     fn rc_pulse_width(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::RCPulseWidth as u8)
-            .map(|v| if v == TIC_INPUT_NULL {
-                None
-            } else {
-                Some(v)
-            })
+            .map(|v| if v == TIC_INPUT_NULL { None } else { Some(v) })
     }
 
     /// Gets the analog reading from the specified pin.
@@ -580,8 +566,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// See also [`Self::set_step_mode()`].
     fn step_mode(&mut self) -> Result<StepMode, HandlerError> {
-        StepMode::from_u8(self.get_var8(VarOffset::StepMode as u8)?)
-            .ok_or(HandlerError::ParseError)
+        StepMode::from_u8(self.get_var8(VarOffset::StepMode as u8)?).ok_or(HandlerError::ParseError)
     }
 
     /// Gets the current decay mode of the stepper motor driver.
@@ -605,13 +590,7 @@ pub trait TicBase: communication::TicCommunication {
     /// scaling settings in an RC or analog mode.
     fn input_after_averaging(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::InputAfterAveraging as u8)
-            .map(|r| {
-                if r == TIC_INPUT_NULL {
-                    None
-                } else {
-                    Some(r)
-                }
-            })
+            .map(|r| if r == TIC_INPUT_NULL { None } else { Some(r) })
     }
 
     /// Gets a variable used in the process that converts raw RC and analog values
@@ -619,13 +598,7 @@ pub trait TicBase: communication::TicCommunication {
     /// scaling settings in an RC or analog mode.
     fn input_after_hysteresis(&mut self) -> Result<Option<u16>, HandlerError> {
         self.get_var16(VarOffset::InputAfterHysteresis as u8)
-            .map(|r| {
-                if r == TIC_INPUT_NULL {
-                    None
-                } else {
-                    Some(r)
-                }
-            })
+            .map(|r| if r == TIC_INPUT_NULL { None } else { Some(r) })
     }
 
     /// Gets the value of the Tic's main input after scaling has been applied.
@@ -652,8 +625,7 @@ pub trait TicBase: communication::TicCommunication {
     ///
     /// See also [`Self::set_agc_mode()`].
     fn agc_mode(&mut self) -> Result<AgcMode, HandlerError> {
-        AgcMode::from_u8(self.get_var8(VarOffset::AgcMode as u8)?)
-            .ok_or(HandlerError::ParseError)
+        AgcMode::from_u8(self.get_var8(VarOffset::AgcMode as u8)?).ok_or(HandlerError::ParseError)
     }
 
     /// Gets the AGC bottom current limit.

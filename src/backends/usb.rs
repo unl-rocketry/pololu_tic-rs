@@ -1,15 +1,42 @@
 //! Functionality relating to the USB driver.
 //!
 #![doc = "<div style='padding:30px;background:#810;color:#fff;text-align:center;'><p>The USB driver is <b>untested, unstable</b>, and may change at <b>any time</b>!</p></div>\n\n<br/>\n\n"]
+//!
+//!
+//! ### Usage Example
+//! ```rust
+//! use pololu_tic::usb::list_devices;
+//!
+//! let devices = list_devices().expect("Getting devices failed!");
+//!
+//! if devices.is_empty() {
+//!     eprintln!("Did not find any connected Tic devices.");
+//!     return;
+//! }
+//!
+//! // Print some information about the detected devices
+//! for device in devices {
+//!     println!(
+//!         "{:?}: {}, {}",
+//!         device.product(),
+//!         device.serial_number(),
+//!         device.firmware_revision(),
+//!     );
+//! }
+//!
+//! ```
 
 use core::time::Duration;
 use std::prelude::rust_2024::*;
 
-use nusb::{transfer::{ControlIn, ControlOut, ControlType, Recipient}, DeviceId, MaybeFuture};
+use nusb::{
+    DeviceId, MaybeFuture,
+    transfer::{ControlIn, ControlOut, ControlType, Recipient},
+};
 
 use crate::{
-    base::{communication::TicCommunication, TicBase},
     Command, HandlerError, Product,
+    base::{TicBase, communication::TicCommunication},
 };
 
 const VENDOR_ID: u16 = 0x1FFB;
@@ -31,6 +58,27 @@ const PRODUCT_IDS: &[u16] = &[
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 
+/// Commands exclusive to the USB interface.
+pub enum UsbCommand {
+    /// Writes a byte of data to the Tic’s settings (stored in non-volatile memory) at the specified offset.
+    ///
+    /// Be careful not to call this command in a fast loop to avoid wearing out the Tic’s EEPROM, which is rated for only 100,000 write cycles.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-setting)
+    SetSetting = 0x13,
+
+    /// Reloads all settings from the Tic’s non-volatile memory and discards any temporary changes to the settings previously made with serial commands (this applies to the step mode, current limit, decay mode, max speed, starting speed, max acceleration, and max deceleration settings).
+    ///
+    /// It does not have any of the other effects of the Reset command, instead applying the new settings seamlessly if possible.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-reinitalize)
+    Reinitalize = 0x10,
+
+    /// Causes the Tic to start its bootloader in preparation for receiving a firmware upgrade over USB.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-start-bootloader)
+    StartBootloader = 0xFF,
+}
 
 /// List all Tic devices connected via USB to the computer.
 ///
@@ -38,22 +86,25 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 /// to the system, and return a list of [`UsbInfo`] structs which can be queried
 /// further to find the device you want.
 ///
-/// # Example:
-/// ```rust,ignore
+/// ### Usage Example
+/// ```rust
+/// use pololu_tic::usb::list_devices;
+///
 /// let devices = list_devices().expect("Getting devices failed!");
 ///
 /// // Print some information about the detected devices
 /// for device in devices {
 ///     println!(
-///         "{}: {}, {}",
+///         "{:?}: {}, {}",
 ///         device.product(),
 ///         device.serial_number(),
 ///         device.firmware_revision(),
 ///     );
 /// }
 /// ```
-pub async fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
-    let device_list = nusb::list_devices().await?
+pub fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
+    let device_list = nusb::list_devices()
+        .wait()?
         .filter(|d| d.vendor_id() == VENDOR_ID)
         .filter(|d| PRODUCT_IDS.contains(&d.product_id()))
         .filter_map(|d| UsbInfo::new(d).ok())
@@ -61,7 +112,6 @@ pub async fn list_devices() -> Result<Vec<UsbInfo>, HandlerError> {
 
     Ok(device_list)
 }
-
 
 /// Information about a Tic board attached via USB.
 ///
@@ -76,7 +126,6 @@ pub struct UsbInfo {
 
     product: Product,
 }
-
 
 impl UsbInfo {
     /// Create a new USB interface to a Tic device. To actually use the device,
@@ -142,11 +191,11 @@ impl UsbInfo {
         self.firmware_revision
     }
 
+    /// Gets an opaque identifier to identify a device absolutely.
     pub fn device_id(&self) -> DeviceId {
         self.unique_id
     }
 }
-
 
 /// USB interface to a Tic board.
 pub struct Usb {
@@ -161,18 +210,25 @@ impl Usb {
     ///
     /// It is not available on the [`crate::Serial`] and [`crate::I2c`]
     /// interfaces.
-    pub async fn set_setting(&mut self, cmd: u8, data: u16, offset: u16) -> Result<(), HandlerError> {
-        self.usb_interface.control_out(
-            ControlOut {
-                control_type: ControlType::Vendor,
-                recipient: Recipient::Device,
-                request: cmd,
-                value: data,
-                index: offset,
-                data: &[],
-            },
-            DEFAULT_TIMEOUT
-        ).await?;
+    pub async fn set_setting(
+        &mut self,
+        cmd: u8,
+        data: u16,
+        offset: u16,
+    ) -> Result<(), HandlerError> {
+        self.usb_interface
+            .control_out(
+                ControlOut {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Device,
+                    request: cmd,
+                    value: data,
+                    index: offset,
+                    data: &[],
+                },
+                DEFAULT_TIMEOUT,
+            )
+            .await?;
 
         Ok(())
     }
@@ -180,49 +236,55 @@ impl Usb {
 
 impl TicCommunication for Usb {
     fn command_quick(&mut self, cmd: Command) -> Result<(), HandlerError> {
-        self.usb_interface.control_out(
-            ControlOut {
-                control_type: ControlType::Vendor,
-                recipient: Recipient::Device,
-                request: cmd as u8,
-                value: 0,
-                index: 0,
-                data: &[],
-            },
-            DEFAULT_TIMEOUT
-        ).wait()?;
+        self.usb_interface
+            .control_out(
+                ControlOut {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Device,
+                    request: cmd as u8,
+                    value: 0,
+                    index: 0,
+                    data: &[],
+                },
+                DEFAULT_TIMEOUT,
+            )
+            .wait()?;
 
         Ok(())
     }
 
     fn command_w7(&mut self, cmd: Command, val: u8) -> Result<(), HandlerError> {
-        self.usb_interface.control_out(
-            ControlOut {
-                control_type: ControlType::Vendor,
-                recipient: Recipient::Device,
-                request: cmd as u8,
-                value: val as u16,
-                index: 0,
-                data: &[],
-            },
-            DEFAULT_TIMEOUT
-        ).wait()?;
+        self.usb_interface
+            .control_out(
+                ControlOut {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Device,
+                    request: cmd as u8,
+                    value: val as u16,
+                    index: 0,
+                    data: &[],
+                },
+                DEFAULT_TIMEOUT,
+            )
+            .wait()?;
 
         Ok(())
     }
 
     fn command_w32(&mut self, cmd: Command, val: u32) -> Result<(), HandlerError> {
-        self.usb_interface.control_out(
-            ControlOut {
-                control_type: ControlType::Vendor,
-                recipient: Recipient::Device,
-                request: cmd as u8,
-                value: (val & 0x00FF) as u16,
-                index: ((val & 0xFF00) >> 16) as u16,
-                data: &[],
-            },
-            DEFAULT_TIMEOUT
-        ).wait()?;
+        self.usb_interface
+            .control_out(
+                ControlOut {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Device,
+                    request: cmd as u8,
+                    value: (val & 0x00FF) as u16,
+                    index: ((val & 0xFF00) >> 16) as u16,
+                    data: &[],
+                },
+                DEFAULT_TIMEOUT,
+            )
+            .wait()?;
 
         Ok(())
     }
@@ -233,17 +295,20 @@ impl TicCommunication for Usb {
         offset: u8,
         buffer: &mut [u8],
     ) -> Result<(), HandlerError> {
-        let result = self.usb_interface.control_in(
-            ControlIn {
-                control_type: ControlType::Vendor,
-                recipient: Recipient::Device,
-                request: cmd as u8,
-                value: 0,
-                index: offset as u16,
-                length: buffer.len() as u16,
-            },
-            DEFAULT_TIMEOUT
-        ).wait()?;
+        let result = self
+            .usb_interface
+            .control_in(
+                ControlIn {
+                    control_type: ControlType::Vendor,
+                    recipient: Recipient::Device,
+                    request: cmd as u8,
+                    value: 0,
+                    index: offset as u16,
+                    length: buffer.len() as u16,
+                },
+                DEFAULT_TIMEOUT,
+            )
+            .wait()?;
 
         buffer.copy_from_slice(&result);
 

@@ -10,7 +10,7 @@
 //! but is perfectly suitable for using on other computers with the `usb` feature
 //! enabled.
 //!
-//! Currently, this driver supports the I²C, Serial, and USB control modes which
+//! Currently, this driver supports the [I²C](I2c), [Serial], and [USB](usb) control modes which
 //! the Tic devices support. This driver only supports `embedded-hal >= 1.0`.
 //!
 //! ## Feature Flags
@@ -31,9 +31,9 @@
 //! More examples can be found in the struct documentation for each interface
 //! type.
 //!
-//! A basic example of using this library to set up and control a Tic36v4 is as
-//! follows. Ensure you replace `<i2c_bus>` with your platform's `embedded_hal`
-//! I²C interface.
+//! A basic example of using this library to set up and control a Tic36v4 over I²C is as
+//! follows. Ensure you replace `<i2c_bus>` and `<delay>` with your platform's `embedded_hal`
+//! I²C interface and delay implementations.
 //!
 //! ```rust,ignore
 //! use pololu_tic::{TicBase, TicI2C, Product};
@@ -41,6 +41,7 @@
 //! let mut tic = pololu_tic::TicI2C::new_with_address(
 //!     <i2c_bus>,
 //!     Product::Tic36v4,
+//!     <delay>,
 //!     14
 //! );
 //!
@@ -52,12 +53,14 @@
 //! ```
 
 #![deny(unsafe_code)]
+#![warn(missing_docs)]
 #![no_std]
 
 #[cfg(feature = "std")]
 extern crate std;
 
 mod base;
+pub mod variables;
 
 mod backends {
     #[cfg(feature = "i2c")]
@@ -95,10 +98,11 @@ const TIC_03A_CURRENT_TABLE: [u16; 33] = [
     1835, 1909, 1982, 2056, 2131, 2207, 2285, 2366, 2451, 2540, 2634, 2734, 2843, 2962, 3093,
 ];
 
+/// Represents a [`None`] value for some specific commands.
 pub const TIC_INPUT_NULL: u16 = 0xFFFF;
 
 /// The type of Tic driver that is being represented.
-#[derive(FromPrimitive, ToPrimitive, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, FromPrimitive, ToPrimitive, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Product {
     /// An unknown driver. Used if not provided, as the default.
@@ -179,10 +183,33 @@ pub enum Error {
     ///
     /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-err-high)
     ErrLineHigh = 8,
+    /// The Tic receives a TTL serial byte that does not have a valid stop bit.
+    ///
+    /// Related to the [`Self::SerialError`] error.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     SerialFraming = 16,
+    /// The Tic receives a TTL serial byte at a time when its hardware or software buffers are not able to hold the byte, and the byte is lost. This should not happen under normal conditions.
+    ///
+    /// Related to the [`Self::SerialError`] error.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     RxOverrun = 17,
+    /// The Tic receives a TTL serial byte with its most significant bit set (which starts a new command) while it is still waiting for data bytes from the previous command.
+    ///
+    /// Related to the [`Self::SerialError`] error.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     Format = 18,
+    /// The Tic receives an incorrect CRC byte at the end of a command.
+    ///
+    /// Related to the [`Self::SerialError`] error.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/5.4#cond-serial-error)
     Crc = 19,
+    /// The Tic has detected the encoder is missing some counts.
+    ///
+    /// [Read more](<https://www.pololu.com/docs/0J71/4.12#:~:text=As you do this, look at the "Encoder Skip" count>)
     EncoderSkip = 20,
 }
 
@@ -190,32 +217,42 @@ pub enum Error {
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum HandlerError {
+    /// An error internal to the driver.
     #[error("the driver experienced an internal error")]
     InternalError(Error),
 
+    /// An I²C communication error.
     #[cfg(feature = "i2c")]
     #[error("the i2c communication experienced an error")]
     I2cError(embedded_hal::i2c::ErrorKind),
 
+    /// A stream communication error.
+    ///
+    /// Most likely applicable to Serial.
     #[cfg(feature = "serial")]
     #[error("the serial communication experienced an error")]
     StreamError(embedded_io::ErrorKind),
 
+    /// An `nusb` internal error.
     #[cfg(feature = "usb")]
     #[error("internal nusb error")]
     NusbError(nusb::Error),
 
+    /// A USB transfer error.
     #[cfg(feature = "usb")]
     #[error("the USB communication experienced a transfer error")]
     UsbTransferError(nusb::transfer::TransferError),
 
+    /// USB invalid device error.
     #[cfg(feature = "usb")]
     #[error("the target USB device is invalid")]
     UsbInvalidDevice(u16),
 
+    /// Attempted to use a device before initalization.
     #[error("the device is not yet initalized")]
     NotInitalized,
 
+    /// Generic parsing error.
     #[error("the value could not be parsed")]
     ParseError,
 }
@@ -229,276 +266,160 @@ pub enum HandlerError {
 pub enum Command {
     /// Sets the target position of the Tic, in microsteps.
     ///
+    /// If the control mode is set to Serial / I²C / USB, the Tic will start moving the motor to reach the target position. If the control mode is something other than Serial / I²C / USB, this command will be silently ignored.
+    ///
     /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-target-position)
     SetTargetPosition = 0xE0,
+
     /// Sets the target velocity of the Tic, in microsteps per 10,000 seconds.
     ///
-    /// [Read more]()
+    /// If the control mode is set to Serial / I²C / USB, the Tic will start accelerating or decelerating the motor to reach the target velocity. If the control mode is something other than Serial / I²C / USB, this command will be silently ignored.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-target-velocity)
     SetTargetVelocity = 0xE3,
-    /// Stops the motor abruptly without respecting the deceleration limit and sets the “Current position” variable, which represents what position the Tic currently thinks the motor is in. Besides stopping the motor and setting the current position, this command also clears the [`Flags::PositionUncertain`] flag, sets the input state to [`InputState::Halt`], and clears the “input after scaling” variable.
+
+    /// Stops the motor abruptly without respecting the deceleration limit and sets the “Current position” variable, which represents what position the Tic currently thinks the motor is in.
     ///
-    /// [Read more]()
+    /// Besides stopping the motor and setting the current position, this command also clears the [`Flags::PositionUncertain`](variables::Flags::PositionUncertain) flag, sets the input state to [`InputState::Halt`](variables::InputState::Halt), and clears the “input after scaling” variable.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-halt-and-set-position)
     HaltAndSetPosition = 0xEC,
-    /// Stops the motor abruptly without respecting the deceleration limit. Besides stopping the motor, this command also sets the [`Flags::PositionUncertain`] flag (because the abrupt stop might cause steps to be missed), sets the input state to [`InputState::Halt`], and clears the “input after scaling” variable.
+
+    /// Stops the motor abruptly without respecting the deceleration limit.
     ///
-    /// [Read more]()
+    /// Besides stopping the motor, this command also sets the [`Flags::PositionUncertain`](variables::Flags::PositionUncertain) flag (because the abrupt stop might cause steps to be missed), sets the input state to [`InputState::Halt`](variables::InputState::Halt), and clears the “input after scaling” variable.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-halt-and-hold)
     HaltAndHold = 0x89,
-    /// Starts the Tic’s homing procedure.
+
+    /// Starts the Tic’s homing procedure as described in [**Section 5.6 - Homing**](https://www.pololu.com/docs/0J71/5.6).
     ///
-    /// [Read more]()
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-go-home)
     GoHome = 0x97,
-    /// If the command timeout is enabled, this command resets it and prevents the [`Error::CommandTimeout`] error from happening for some time. See [**Section 5.4 - Error handling**](https://www.pololu.com/docs/0J71/5.4) of the Tic user's guide for more information about the command timeout.
+
+    /// If the command timeout is enabled, this command resets it and prevents the [`Error::CommandTimeout`] error from happening for some time.
     ///
-    /// [Read more]()
+    /// See [**Section 5.4 - Error handling**](https://www.pololu.com/docs/0J71/5.4) of the Tic user's guide for more information about the command timeout.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-reset-command-timeout)
     ResetCommandTimeout = 0x8C,
-    /// Causes the Tic to de-energize the stepper motor coils by disabling its stepper motor driver. The motor will stop moving and consuming power. This command sets the [`Flags::PositionUncertain`] flag (because the Tic is no longer in control of the motor’s position); the Tic will also set the [`Error::IntentionallyDeenergized`] error, turn on its red LED, and drive its ERR line high.
+
+    /// Causes the Tic to de-energize the stepper motor coils by disabling its stepper motor driver.
     ///
-    /// [`Command::Energize`] will undo the effect of this command (except it will leave the [`Flags::PositionUncertain`] flag set) and could make the system start up again.
+    /// The motor will stop moving and consuming power. This command sets the [`Flags::PositionUncertain`][variables::Flags::PositionUncertain] flag (because the Tic is no longer in control of the motor’s position); the Tic will also set the [`Error::IntentionallyDeenergized`] error, turn on its red LED, and drive its ERR line high.
     ///
-    /// [Read more]()
+    /// [`Command::Energize`] will undo the effect of this command (except it will leave the [`Flags::PositionUncertain`][variables::Flags::PositionUncertain] flag set) and could make the system start up again.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-deenergize)
     Deenergize = 0x86,
+
     /// A request for the Tic to energize the stepper motor coils by enabling its stepper motor driver. The Tic will clear the [`Error::IntentionallyDeenergized`] error. If there are no other errors, this allows the system to start up.
     ///
-    /// [Read more]()
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-energize)
     Energize = 0x85,
+
     /// Causes the [`Error::SafeStartViolation`] error to be cleared for 200 ms. If there are no other errors, this allows the system to start up. If the control mode is not Serial / I²C / USB, then this command is silently ignored.
     ///
-    /// [Read more]()
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-exit-safe-start)
     ExitSafeStart = 0x83,
-    /// If safe start is enabled and the control mode is Serial / I²C / USB, RC speed, analog speed, or encoder speed, this command causes the Tic to stop the motor (using the configured soft error response behavior) and set its [`Error::SafeStartViolation`] error bit. If safe start is disabled, or if the Tic is not in one of the listed modes, this command will cause a brief interruption in motor control (during which the soft error response behavior will be triggered) but otherwise have no effect.
+
+    /// If safe start is enabled and the control mode is Serial / I²C / USB, RC speed, analog speed, or encoder speed, this command causes the Tic to stop the motor (using the configured soft error response behavior) and set its [`Error::SafeStartViolation`] error bit.
     ///
-    /// [Read more]()
+    /// If safe start is disabled, or if the Tic is not in one of the listed modes, this command will cause a brief interruption in motor control (during which the soft error response behavior will be triggered) but otherwise have no effect.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-enter-safe-start)
     EnterSafeStart = 0x8F,
-    /// This command makes the Tic forget most parts of its current state. Specifically, it does the following:
+
+    /// This command makes the Tic forget most parts of its current state.
+    ///
+    /// Specifically, it does the following:
     /// - Reloads all settings from the Tic’s non-volatile memory and discards any temporary changes to the settings previously made with serial commands (this applies to the step mode, current limit, decay mode, max speed, starting speed, max acceleration, and max deceleration settings)
     /// - Abruptly halts the motor
     /// - Resets the motor driver
-    /// - Sets the Tic’s operation state to [`OperationState::Reset`]
+    /// - Sets the Tic’s operation state to [`OperationState::Reset`][variables::OperationState::Reset]
     /// - Clears the last movement command and the current position
     /// - Clears the encoder position
     /// - Clears the serial and [`Error::CommandTimeout`] errors and the [`TicBase::errors_occurred`] bits
     /// - Enters safe start if configured to do so
     ///
-    /// [Read more]()
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-reset)
     Reset = 0xB0,
-    ClearDriverError = 0x8A,
-    SetSpeedMax = 0xE6,
-    SetStartingSpeed = 0xE5,
-    SetAccelMax = 0xEA,
-    SetDecelMax = 0xE9,
-    SetStepMode = 0x94,
-    /// Temporarily sets the stepper motor coil current limit of the driver on the Tic. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next Reset (or Reinitialize) command or full microcontroller reset.
+
+    /// Attempts to clear a motor driver error, which is an over-current or over-temperature fault reported by the Tic’s motor driver.
     ///
-    /// [Read more]()
+    /// If the “Automatically clear driver errors” setting is enabled (the default), the Tic will automatically clear a driver error and it is not necessary to send this command. Otherwise, this command must be sent to clear the driver error before the Tic can continue controlling the motor. See [**Section 5.4 - Error handling**](https://www.pololu.com/docs/0J71/5.4) for more information about driver errors.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-clear-driver-error)
+    ClearDriverError = 0x8A,
+
+    /// Temporarily sets the Tic’s maximum allowed motor speed in units of steps per 10,000 seconds.
+    ///
+    /// The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-max-speed)
+    SetSpeedMax = 0xE6,
+
+    /// Temporarily sets the Tic’s starting speed in units of steps per 10,000 seconds.
+    ///
+    /// This is the maximum speed at which instant acceleration and deceleration are allowed; see Section 5.1 for more information. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-clear-driver-error)
+    SetStartingSpeed = 0xE5,
+
+    /// Temporarily sets the Tic’s maximum allowed motor acceleration in units of steps per second per 100 seconds. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// If the provided value is between 0 and 99, it is treated as 100.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-max-acceleration)
+    SetAccelMax = 0xEA,
+
+    /// Temporarily sets the Tic’s maximum allowed motor deceleration in units of steps per second per 100 seconds. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// If the provided value is 0, then the max deceleration will be set equal to the current max acceleration value. If the provided value is between 1 and 99, it is treated as 100.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-max-deceleration)
+    SetDecelMax = 0xE9,
+
+    /// Temporarily sets the step mode (also known as microstepping mode) of the driver on the Tic, which defines how many microsteps correspond to one full step.
+    ///
+    /// The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-step-mode)
+    SetStepMode = 0x94,
+
+    /// Temporarily sets the stepper motor coil current limit of the driver on the Tic. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// See the description of the “Current limit” setting in [**Section 7 - Setting reference**](https://www.pololu.com/docs/0J71/6) for information about the units and allowed ranges for the 7-bit current limit argument for each different type of Tic.
+    ///
+    /// Note: This crate automatically converts between the proper units when using [TicBase::current_limit] and [TicBase::set_current_limit], so doing any conversions is not necessary unless implementing a new Tic type.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-current-limit)
     SetCurrentLimit = 0x91,
+
+    /// Temporarily sets the decay mode of the driver on the Tic.
+    ///
+    /// For more information about the decay mode, see [**Section 7 - Setting reference**](https://www.pololu.com/docs/0J71/6) and the driver datasheet. The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset. If the command contains an unrecognized decay mode, the Tic will use decay mode 0. Although the decay mode on the Tic T500 and Tic T249 is not configurable, those Tics still accept this command.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-decay-mode)
     SetDecayMode = 0x92,
+
+    /// Only valid for the Tic T249. It temporarily changes one of the configuration options of the Active Gain Control (AGC). The provided value will override the corresponding setting from the Tic’s non-volatile memory until the next [`Command::Reset`] (or [`UsbCommand::Reinitalize`][crate::usb::UsbCommand::Reinitalize]) command or full microcontroller reset.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-set-agc-option)
     SetAgcOption = 0x98,
+
+    /// Reads a block of data from the Tic’s variables; the block starts from the specified offset and can have a variable length. See [**Section 7 - Variable reference**](https://www.pololu.com/docs/0J71/7) for the offset and type of each variable.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-get-variable)
     GetVariable = 0xA1,
+
+    /// This command is identical to [`Command::GetVariable`], except that it also clears the “Errors occurred” variable at the same time. The intended use of this command is to both read and clear the “Errors occurred” variable so that whenever you see a bit set in that variable, you know it indicates an error that occurred since the last “Get variable and clear errors occurred” command.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-get-variable-and-clear-errors-occurred)
     GetVariableAndClearErrorsOccurred = 0xA2,
+
+    /// Reads a block of data from the Tic’s settings (stored in non-volatile memory); the block starts from the specified offset and can have a variable length. While some of the Tic’s settings can be overridden temporarily using other commands documented in this section, the settings that this command accesses are stored in non-volatile memory and can only be changed using [`UsbCommand::SetSetting`][crate::usb::UsbCommand::SetSetting]. See [**Section 7 - Setting reference**](https://www.pololu.com/docs/0J71/6) for the offset and type of each setting.
+    ///
+    /// [Read more](https://www.pololu.com/docs/0J71/8#cmd-get-setting)
     GetSetting = 0xA8,
-}
-
-/// The possible operation states for the Tic.
-///
-/// See [`TicBase::operation_state()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum OperationState {
-    Reset = 0,
-    Deenergized = 2,
-    SoftError = 4,
-    WaitingForErrLine = 6,
-    StartingUp = 8,
-    Normal = 10,
-}
-
-/// The possible planning modes for the Tic's step generation code.
-///
-/// See [`TicBase::planning_mode()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum PlanningMode {
-    Off = 0,
-    TargetPosition = 1,
-    TargetVelocity = 2,
-}
-
-/// The possible causes of a full microcontroller reset for the Tic.
-///
-/// See [`TicBase::device_reset_cause()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum ResetCause {
-    PowerUp = 0,
-    Brownout = 1,
-    ResetLine = 2,
-    Watchdog = 4,
-    Software = 8,
-    StackOverflow = 16,
-    StackUnderflow = 32,
-}
-
-/// The possible decay modes.
-///
-/// See [`TicBase::decay_mode()`] and [`TicBase::set_decay_mode()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum DecayMode {
-    /// This specifies "Mixed" decay mode on the Tic T825
-    /// and "Mixed 50%" on the Tic T824.
-    Mixed = 0,
-
-    /// This specifies "Slow" decay mode.
-    Slow = 1,
-
-    /// This specifies "Fast" decay mode.
-    Fast = 2,
-
-    /// This specifies "Mixed 25%" decay mode on the Tic T824
-    /// and is the same as [`DecayMode::Mixed`] on the Tic T825.
-    Mixed25 = 3,
-
-    /// This specifies "Mixed 75%" decay mode on the Tic T824
-    /// and is the same as [`DecayMode::Mixed`] on the Tic T825.
-    Mixed75 = 4,
-}
-
-/// The possible step modes.
-///
-/// See [`TicBase::step_mode()`] and [`TicBase::set_step_mode()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum StepMode {
-    Full = 0,
-    Half = 1,
-    Microstep4 = 2,
-    Microstep8 = 3,
-    Microstep16 = 4,
-    Microstep32 = 5,
-    Microstep2_100p = 6,
-    Microstep64 = 7,
-    Microstep128 = 8,
-    Microstep256 = 9,
-}
-
-/// Possible AGC modes.
-///
-/// See [`TicBase::set_agc_mode()`] and [`TicBase::agc_mode()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum AgcMode {
-    Off = 0,
-    On = 1,
-    ActiveOff = 2,
-}
-
-/// Possible AGC bottom current limit percentages.
-///
-/// See [`TicBase::set_agc_bottom_current_limit()`] and [`TicBase::agc_bottom_current_limit()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum AgcBottomCurrentLimit {
-    P45 = 0,
-    P50 = 1,
-    P55 = 2,
-    P60 = 3,
-    P65 = 4,
-    P70 = 5,
-    P75 = 6,
-    P80 = 7,
-}
-
-/// Possible AGC current boost steps values.
-///
-/// See [`TicBase::set_agc_current_boost_steps()`] and [`TicBase::agc_current_boost_steps()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum AgcCurrentBoostSteps {
-    S5 = 0,
-    S7 = 1,
-    S9 = 2,
-    S11 = 3,
-}
-
-/// Possible AGC frequency limit values.
-///
-/// See [`TicBase::set_agc_frequency_limit()`] and [`TicBase::agc_frequency_limit()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum AgcFrequencyLimit {
-    Off = 0,
-    F225Hz = 1,
-    F450Hz = 2,
-    F675Hz = 3,
-}
-
-/// The Tic's control pins.
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum ControlPin {
-    SCL = 0,
-    SDA = 1,
-    TX = 2,
-    RX = 3,
-    RC = 4,
-}
-
-/// The Tic's pin states.
-///
-/// See [`TicBase::pin_state()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum PinState {
-    HighImpedance = 0,
-    InputPullUp = 1,
-    OutputLow = 2,
-    OutputHigh = 3,
-}
-
-/// The possible states of the Tic's main input.
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum InputState {
-    /// The input is not ready yet.  More samples are needed, or a command has not
-    /// been received yet.
-    NotReady = 0,
-
-    /// The input is invalid.
-    Invalid = 1,
-
-    /// The input is valid and is telling the Tic to halt the motor.
-    Halt = 2,
-
-    /// The input is valid and is telling the Tic to go to a target position,
-    /// which you can get with [`TicBase::input_after_scaling()`].
-    Position = 3,
-
-    /// The input is valid and is telling the Tic to go to a target velocity,
-    /// which you can get with [`TicBase::input_after_scaling()`].
-    Velocity = 4,
-}
-
-/// The bits in the Tic's Misc Flags 1 register.
-///
-/// You should not need to use this directly. See [`TicBase::is_energized()`] and
-/// [`TicBase::is_position_uncertain()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum Flags {
-    Energized = 0,
-    PositionUncertain = 1,
-    ForwardLimitActive = 2,
-    ReverseLimitActive = 3,
-    HomingActive = 4,
-}
-
-/// Possible motor driver errors for the Tic T249.
-///
-/// See [`TicBase::last_motor_driver_error()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum MotorDriverError {
-    None = 0,
-    OverCurrent = 1,
-    OverTemperature = 2,
-}
-
-/// The bits in the "Last HP driver errors" variable.
-///
-/// See [`TicBase::last_hp_driver_errors()`].
-#[derive(FromPrimitive, ToPrimitive, Debug, PartialEq, Eq)]
-pub enum HpDriverError {
-    OverTemperature = 0,
-    OverCurrentA = 1,
-    OverCurrentB = 2,
-    PreDriverFaultA = 3,
-    PreDriverFaultB = 4,
-    UnderVoltage = 5,
-    Verify = 7,
 }

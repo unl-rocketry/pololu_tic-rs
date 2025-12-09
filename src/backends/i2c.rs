@@ -1,13 +1,34 @@
 //! I2C interface to a Tic motor driver board.
 
-use embedded_hal::{delay::DelayNs, i2c::{Error, I2c as ExternalI2c}};
+use embedded_hal::{
+    delay::DelayNs,
+    i2c::{Error, I2c as ExternalI2c},
+};
 
 use crate::{
-    base::{communication::TicCommunication, TicBase},
     Command, HandlerError, Product,
+    base::{TicBase, communication::TicCommunication},
 };
 
 /// I2C interface to a Tic board.
+///
+/// ### Usage Example
+/// ```rust,ignore
+/// use pololu_tic::{TicBase as _, I2c as TicI2C, Product};
+///
+/// let mut tic = TicI2C::new_with_address(
+///     <i2c_bus>,
+///     Product::Tic36v4,
+///     <delay>,
+///     14
+/// );
+///
+/// tic.set_target_velocity(2000000);
+///
+/// loop {
+///     tic.reset_command_timeout();
+/// }
+/// ```
 pub struct I2c<I: ExternalI2c, D: DelayNs> {
     address: u8,
     i2c: I,
@@ -18,6 +39,7 @@ pub struct I2c<I: ExternalI2c, D: DelayNs> {
 impl<I: ExternalI2c, D: DelayNs> I2c<I, D> {
     const DEFAULT_ADDR: u8 = 14;
 
+    /// Create a new Tic as an I²C device with default values for the address.
     pub const fn new_default(i2c: I, product: Product, delay: D) -> Self {
         Self {
             address: Self::DEFAULT_ADDR,
@@ -27,6 +49,7 @@ impl<I: ExternalI2c, D: DelayNs> I2c<I, D> {
         }
     }
 
+    /// Create a new Tic as an I²C device with a custom address value.
     pub const fn new_with_address(i2c: I, product: Product, delay: D, address: u8) -> Self {
         Self {
             address,
@@ -36,6 +59,7 @@ impl<I: ExternalI2c, D: DelayNs> I2c<I, D> {
         }
     }
 
+    /// Get the current I²C address value.
     pub const fn get_address(&self) -> u8 {
         self.address
     }
