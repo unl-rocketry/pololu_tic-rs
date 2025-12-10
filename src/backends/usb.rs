@@ -4,10 +4,15 @@
 //!
 //!
 //! ### Usage Example
-//! ```rust
-//! use pololu_tic::usb::list_devices;
+//! Simple USB example. Grabs the first connected Tic device and sts its target
+//! velocity.
 //!
-//! let devices = list_devices().expect("Getting devices failed!");
+//! ```rust
+//! use std::{time::Duration, thread::sleep};
+//! use pololu_tic::{usb::list_devices, TicBase};
+//!
+//! // Get a list of devices
+//! let mut devices = list_devices().expect("Getting devices failed!");
 //!
 //! if devices.is_empty() {
 //!     eprintln!("Did not find any connected Tic devices.");
@@ -15,7 +20,7 @@
 //! }
 //!
 //! // Print some information about the detected devices
-//! for device in devices {
+//! for device in &devices {
 //!     println!(
 //!         "{:?}: {}, {}",
 //!         device.product(),
@@ -24,6 +29,15 @@
 //!     );
 //! }
 //!
+//! // Initalize the device and set its velocity
+//! let mut tic_device = devices[0].init().expect("Could not initalize device.");
+//!
+//! tic_device.set_target_velocity(2000000);
+//!
+//! loop {
+//!     tic_device.reset_command_timeout();
+//!     sleep(Duration::from_millis(10));
+//! }
 //! ```
 
 use core::time::Duration;
@@ -163,9 +177,9 @@ impl UsbInfo {
 
     /// Initialize the device, returning a [`Usb`] device which is able to be
     /// operated on.
-    pub async fn init(&mut self) -> Result<Usb, HandlerError> {
-        let device = self.usb_device_info.open().await?;
-        let usb_interface = device.detach_and_claim_interface(0).await?;
+    pub fn init(&mut self) -> Result<Usb, HandlerError> {
+        let device = self.usb_device_info.open().wait()?;
+        let usb_interface = device.detach_and_claim_interface(0).wait()?;
 
         Ok(Usb {
             usb_interface,
