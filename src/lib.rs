@@ -135,7 +135,7 @@ const TIC_T249_CURRENT_UNITS: u8 = 40;
 /// the Tic user's guide for more information about what these errors mean.
 ///
 /// See [`TicBase::error_status()`] and [`TicBase::errors_occurred()`].
-#[derive(FromPrimitive, ToPrimitive, Debug)]
+#[derive(Clone, Copy, FromPrimitive, ToPrimitive, Debug)]
 pub enum Error {
     /// The "Intentionally de-energized" error bit is 0 when the Tic starts up.
     /// It can be set with the "De-energize" command and cleared with the
@@ -214,7 +214,7 @@ pub enum Error {
 }
 
 /// The generic error type for anything in this crate.
-#[derive(thiserror::Error, Debug)]
+#[derive(Clone, thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum HandlerError {
     /// An error internal to the driver.
