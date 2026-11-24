@@ -1,8 +1,4 @@
 # Pololu Tic Rust Driver
-[![Lib.rs Version](https://img.shields.io/crates/v/pololu_tic?style=for-the-badge&logo=rust&label=lib.rs&color=%23a68bfc)](https://lib.rs/crates/pololu_tic)
-[![docs.rs](https://img.shields.io/docsrs/pololu_tic?style=for-the-badge)](https://docs.rs/pololu_tic/)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/unl-rocketry/pololu_tic-rs/rust_build-test.yml?style=for-the-badge)
-
 A Rust crate for controlling the [Pololu Tic](https://www.pololu.com/tic) series
 of stepper motor drivers. It supports the same devices the
 [official Arduino driver](https://github.com/pololu/tic-arduino) does, namely
@@ -11,7 +7,7 @@ that the [pololu-tic-software](https://github.com/pololu/pololu-tic-software)
 program supports.
 
 This driver by default will work in `no-std` enviroments like microcontrollers,
-but is perfectly suitable for using on other computers with the `usb` feature
+but is perfectly suitable for use on other computers with the `usb` feature
 enabled.
 
 Currently, this driver supports the I²C, Serial, and USB control modes which
